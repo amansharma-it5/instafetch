@@ -43,6 +43,10 @@ const reelResponse = {
 test('homepage renders the downloader and navigation', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveTitle('InstaFetch · Public Instagram media downloader');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/favicon.svg');
+  const favicon = await page.request.get('/favicon.svg');
+  expect(favicon.status()).toBe(200);
+  expect(await favicon.text()).toContain('InstaFetch');
   await expect(page.getByRole('heading', { name: /Instagram Downloader/i })).toBeVisible();
   await expect(page.getByPlaceholder('Paste Instagram link here')).toBeVisible();
   await expect(page.getByRole('link', { name: 'InstaFetch home' })).toBeVisible();

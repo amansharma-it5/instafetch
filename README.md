@@ -68,6 +68,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 Frontend variable:
 
 - `VITE_API_BASE_URL`: the API origin used at build time, such as the Render service URL.
+- `VITE_SITE_URL`: the bare frontend origin used for canonical and social metadata. It defaults to `https://instafetch.pages.dev`; set it to the custom domain before a custom-domain build.
+
+`WEB_ORIGIN` uses a comma-separated list of exact browser origins, for example `https://instafetch.pages.dev,https://instafetch.example`. Do not include paths, credentials, wildcards, or trailing route fragments. When a custom frontend domain is added, add that exact origin to `WEB_ORIGIN` and set the same origin in `VITE_SITE_URL` for the next Pages build.
 
 ## Deploy the API to Render
 
@@ -92,8 +95,11 @@ Create a Pages project from the same repository and `main` branch with these set
 - **Build output directory:** `apps/web/dist`.
 - **Node.js version:** `22` (set the Pages `NODE_VERSION` environment variable if the project does not inherit it).
 - **Environment variable:** `VITE_API_BASE_URL=https://<your-render-service>.onrender.com` for the production build.
+- **Environment variable:** `VITE_SITE_URL=https://instafetch.pages.dev` for the current Pages origin, or the future custom frontend origin.
 
-Cloudflare Pages should use the repository's `package-lock.json` and npm workspaces. Set `VITE_API_BASE_URL` before each production build so the browser calls the Render API; no API credentials belong in frontend variables.
+Cloudflare Pages should use the repository's `package-lock.json` and npm workspaces. Set both frontend variables before each production build so the browser calls the Render API and generated canonical/social metadata uses the intended site origin; no API credentials belong in frontend variables. For a future custom domain, add the domain to Pages, update `VITE_SITE_URL`, add the exact origin to the backend `WEB_ORIGIN`, and redeploy the affected service(s).
+
+There is no Wrangler configuration or Workers deployment script in this repository. If a separate `Workers Builds` check appears beside the Pages check, review the Cloudflare account or GitHub integration settings rather than adding Worker configuration here.
 
 ## Security and availability
 

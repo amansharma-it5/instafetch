@@ -1,10 +1,18 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { createApp } from '../src/app';
+import { createApp, parseAllowedOrigins } from '../src/app';
 
 const provider = { isAvailable: () => true, resolve: async () => ({}) };
 
 describe('health endpoints', () => {
+  it('parses multiple exact browser origins without allowing wildcards', () => {
+    expect(parseAllowedOrigins('https://instafetch.pages.dev, https://instafetch.example', true)).toEqual(new Set([
+      'https://instafetch.pages.dev',
+      'https://instafetch.example',
+    ]));
+    expect(() => parseAllowedOrigins('https://instafetch.pages.dev, *', true)).toThrow('Wildcard CORS origins are not allowed');
+  });
+
   it('reports liveness', async () => {
     const response = await request(createApp({ provider })).get('/health/live');
 

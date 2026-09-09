@@ -24,11 +24,7 @@ function requestId(request: express.Request): string {
   return candidate && requestIdPattern.test(candidate) ? candidate : randomUUID();
 }
 
-function allowedOrigins(): Set<string> {
-  const isProduction = process.env.NODE_ENV === 'production';
-  const configured = isProduction
-    ? process.env.WEB_ORIGIN?.trim()
-    : process.env.WEB_ORIGIN?.trim() || process.env.CORS_ORIGIN?.trim() || 'http://localhost:5173';
+export function parseAllowedOrigins(configured: string | undefined, isProduction: boolean): Set<string> {
   const values = configured?.split(',').map((origin) => origin.trim()).filter(Boolean) ?? [];
   if (isProduction && values.length === 0) {
     throw new Error('WEB_ORIGIN must be configured in production');
@@ -55,6 +51,14 @@ function allowedOrigins(): Set<string> {
     return parsed.origin;
   });
   return new Set(normalized);
+}
+
+function allowedOrigins(): Set<string> {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const configured = isProduction
+    ? process.env.WEB_ORIGIN?.trim()
+    : process.env.WEB_ORIGIN?.trim() || process.env.CORS_ORIGIN?.trim() || 'http://localhost:5173';
+  return parseAllowedOrigins(configured, isProduction);
 }
 
 export interface AppOptions {
