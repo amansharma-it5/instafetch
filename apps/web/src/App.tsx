@@ -98,7 +98,7 @@ function useDownloader() {
       canonicalUrl = validated.canonicalUrl;
       sourceCategory = categoryForSourceType(validated.route);
     } catch {
-      analytics.track("resolve_failure", "unknown");
+      analytics.track("resolve_failed", "unknown");
       setState({
         status: "error",
         code: "INVALID_INSTAGRAM_URL",
@@ -123,7 +123,7 @@ function useDownloader() {
         nextController.signal,
       );
       if (response.data.items.length === 0) {
-        analytics.track("resolve_failure", sourceCategory);
+        analytics.track("resolve_failed", sourceCategory);
         setState({
           status: "error",
           code: "PROVIDER_MALFORMED_RESPONSE",
@@ -140,7 +140,7 @@ function useDownloader() {
       if (error instanceof DOMException && error.name === "AbortError") return;
       const code =
         error instanceof ApiClientError ? error.code : "NETWORK_FAILURE";
-      analytics.track("resolve_failure", sourceCategory);
+      analytics.track("resolve_failed", sourceCategory);
       setState({ status: "error", code, message: userMessage(code, t) });
     } finally {
       if (slowTimer.current !== null) window.clearTimeout(slowTimer.current);
@@ -196,7 +196,11 @@ function Header() {
             <select
               aria-label={t("language")}
               value={locale}
-              onChange={(event) => setLocale(event.target.value as Locale)}
+              onChange={(event) => {
+                const nextLocale = event.target.value as Locale;
+                if (nextLocale !== locale) analytics.track("language_changed", "unknown");
+                setLocale(nextLocale);
+              }}
             >
               <option value="en">EN</option>
               <option value="es">ES</option>
@@ -375,10 +379,24 @@ function StatusMessage({
   return null;
 }
 
-function MediaPreview({ item }: { item: ResolveMediaItem }) {
+function MediaPreview({
+  item,
+  category,
+}: {
+  item: ResolveMediaItem;
+  category: ReturnType<typeof categoryForSourceType>;
+}) {
   const { t } = useI18n();
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const previewTracked = useRef(false);
+  const markLoaded = () => {
+    setLoaded(true);
+    if (!previewTracked.current) {
+      previewTracked.current = true;
+      analytics.track("preview_opened", category);
+    }
+  };
   if (failed)
     return (
       <div className="preview-fallback">
@@ -400,7 +418,7 @@ function MediaPreview({ item }: { item: ResolveMediaItem }) {
           aria-label={t("media.video")}
           controls
           onError={() => setFailed(true)}
-          onLoadedMetadata={() => setLoaded(true)}
+          onLoadedMetadata={markLoaded}
           preload="metadata"
           src={mediaUrl(item.previewUrl)}
         />
@@ -409,7 +427,7 @@ function MediaPreview({ item }: { item: ResolveMediaItem }) {
           alt={t("media.photo")}
           decoding="async"
           onError={() => setFailed(true)}
-          onLoad={() => setLoaded(true)}
+          onLoad={markLoaded}
           src={mediaUrl(item.previewUrl)}
         />
       )}
@@ -482,7 +500,7 @@ function DownloadLink({
       setState("success");
       resetTimer.current = window.setTimeout(() => setState("idle"), 2_500);
     } catch (error) {
-      analytics.track("download_failure", category);
+      analytics.track("download_failed", category);
       const code =
         error instanceof ApiClientError ? error.code : "DOWNLOAD_FAILED";
       setErrorMessage(userMessage(code, t));
@@ -547,7 +565,7 @@ function MediaCard({
   return (
     <article className="media-card">
       <div className="media-card__preview">
-        <MediaPreview item={item} />
+        <MediaPreview category={category} item={item} />
       </div>
       <div className="media-card__body">
         <div className="media-card__topline">
