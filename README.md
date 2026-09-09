@@ -73,6 +73,15 @@ Frontend variable:
 
 `WEB_ORIGIN` uses a comma-separated list of exact browser origins, for example `https://instafetch.pages.dev,https://instafetch.example`. Do not include paths, credentials, wildcards, or trailing route fragments. When a custom frontend domain is added, add that exact origin to `WEB_ORIGIN` and set the same origin in `VITE_SITE_URL` for the next Pages build.
 
+## Launch operations
+
+- **Production URL:** `https://instafetch.pages.dev`
+- **Health checks:** `https://instafetch-nm9b.onrender.com/health/live` and `/health/ready`
+- **Verified support:** public Instagram Reels with anonymous resolve, preview, and download.
+- **Conditional support:** public video posts, photos, carousels, Stories, and legacy TV URLs when Instagram exposes a genuine anonymous media file.
+- **Analytics:** disabled by default through `VITE_ANALYTICS_ENABLED=false`. If explicitly enabled, only the allowlisted aggregate event name and safe content category are emitted; URLs, usernames, captions, media URLs, tokens, filenames, IP addresses, and credentials are never included. No third-party tracking vendor is configured.
+- **Production verification:** run `npm run smoke:production` for frontend and health checks. To verify a public Reel without credentials, cookies, or browser profiles, pass one explicitly supplied Reel URL to the same command.
+
 ## Deploy the API to Render
 
 `render.yaml` defines a free-compatible Docker Web Service named `instafetch-api` with `/health/live` as its health check. To create it from the repository, use Render's Blueprint flow or configure the same values manually:

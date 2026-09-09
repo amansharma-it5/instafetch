@@ -2,10 +2,12 @@ export const ANALYTICS_EVENTS = [
   'page_view',
   'resolve_started',
   'resolve_success',
-  'resolve_failure',
+  'resolve_failed',
+  'preview_opened',
   'download_started',
   'download_success',
-  'download_failure',
+  'download_failed',
+  'language_changed',
 ] as const;
 
 export type AnalyticsEventName = typeof ANALYTICS_EVENTS[number];
