@@ -53,12 +53,14 @@ describe('media delivery endpoints', () => {
 
     const download = await request(services.app).get(item.downloadUrl);
     expect(download.status).toBe(200);
+    expect(download.headers['cache-control']).toBe('no-store');
     expect(download.headers['content-type']).toContain('video/mp4');
     expect(download.headers['content-disposition']).toContain('attachment; filename="instafetch-');
     expect(download.body.equals(videoBytes)).toBe(true);
 
     const preview = await request(services.app).get(item.previewUrl);
     expect(preview.status).toBe(200);
+    expect(preview.headers['cache-control']).toBe('no-store');
     expect(preview.headers['content-type']).toContain('video/mp4');
     expect(preview.headers['content-disposition']).toContain('inline; filename="instafetch-');
     expect(JSON.stringify(preview.headers)).not.toContain('cdn.test');

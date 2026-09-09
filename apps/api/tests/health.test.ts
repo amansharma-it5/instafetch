@@ -18,6 +18,7 @@ describe('health endpoints', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: 'live' });
+    expect(response.headers['cache-control']).toBe('no-store');
     expect(response.headers['x-content-type-options']).toBe('nosniff');
     expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
   });
@@ -40,5 +41,17 @@ describe('health endpoints', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: 'ready', providers: { instagram: true } });
+  });
+
+  it('returns a safe JSON response for unknown routes without allowing caching', async () => {
+    const response = await request(createApp({ provider })).get('/api/unknown-route');
+
+    expect(response.status).toBe(404);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers['content-type']).toContain('application/json');
+    expect(response.body).toEqual({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'The request could not be processed' },
+    });
   });
 });

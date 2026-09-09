@@ -204,6 +204,66 @@ describe('MediaMaterializer', () => {
     await filesLimited.dispose();
   });
 
+  it('enforces the aggregate cache limit when distinct operations finish concurrently', async () => {
+    let started = 0;
+    let release!: () => void;
+    const bothStarted = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let markStartedBoth!: () => void;
+    const startedBoth = new Promise<void>((resolve) => {
+      markStartedBoth = resolve;
+    });
+    const materializer = new MediaMaterializer({
+      rootDir: root(),
+      maxTotalBytes: videoBytes.length + 1,
+      requestUpstream: async () => {
+        started += 1;
+        if (started === 2) markStartedBoth();
+        await bothStarted;
+        return { statusCode: 200, headers: {}, body: Readable.from(videoBytes) };
+      },
+      allowedHosts: () => true,
+    });
+    const first = materializer.materialize('resolution-1', item('https://cdn.test/one'), Date.now() + 60_000);
+    const second = materializer.materialize('resolution-2', item('https://cdn.test/two'), Date.now() + 60_000);
+    await startedBoth;
+    release();
+    const results = await Promise.allSettled([first, second]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected').map((result) => result.reason.code)).toEqual(['MEDIA_TOO_LARGE']);
+    expect(materializer.cachedBytes()).toBe(videoBytes.length);
+    await materializer.dispose();
+  });
+
+  it('enforces the per-resolution file limit when distinct operations finish concurrently', async () => {
+    let started = 0;
+    let release!: () => void;
+    const bothStarted = new Promise<void>((resolve) => { release = resolve; });
+    let markStartedBoth!: () => void;
+    const startedBoth = new Promise<void>((resolve) => { markStartedBoth = resolve; });
+    const materializer = new MediaMaterializer({
+      rootDir: root(),
+      maxFilesPerResolution: 1,
+      requestUpstream: async () => {
+        started += 1;
+        if (started === 2) markStartedBoth();
+        await bothStarted;
+        return { statusCode: 200, headers: {}, body: Readable.from(videoBytes) };
+      },
+      allowedHosts: () => true,
+    });
+    const first = materializer.materialize('resolution-shared', item('https://cdn.test/one'), Date.now() + 60_000);
+    const second = materializer.materialize('resolution-shared', item('https://cdn.test/two'), Date.now() + 60_000);
+    await startedBoth;
+    release();
+    const results = await Promise.allSettled([first, second]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected').map((result) => result.reason.code)).toEqual(['MEDIA_TOO_LARGE']);
+    expect(materializer.cachedCount()).toBe(1);
+    await materializer.dispose();
+  });
+
   it('downloads separate video and audio streams, remuxes them, and verifies both streams', async () => {
     const runFfmpeg = async (args: string[]) => {
       const outputPath = args.at(-1);
