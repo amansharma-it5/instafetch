@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canonicalUrlForPath, metadataForPath } from "./metadata";
+import { siteAssetUrl } from "./site-config";
 
 describe("page metadata", () => {
   it("keeps the home page truthful and Reel-first", () => {
@@ -26,6 +27,12 @@ describe("page metadata", () => {
     );
     expect(metadataForPath("/contact", "es").description).toContain(
       "InstaFetch",
+    );
+  });
+
+  it("derives social preview assets from the site origin", () => {
+    expect(siteAssetUrl("/social-preview.png", "https://instafetch.example")).toBe(
+      "https://instafetch.example/social-preview.png",
     );
   });
 });

@@ -1,4 +1,4 @@
-import { SITE_URL } from "./site-config";
+import { SITE_URL, siteAssetUrl } from "./site-config";
 import { translate, type Locale } from "./i18n";
 
 export type MetadataPath =
@@ -81,6 +81,16 @@ export function applyPageMetadata(path: string, locale: Locale) {
     { property: "og:site_name" },
     "InstaFetch",
   );
+  ensureMeta(
+    'meta[property="og:image"]',
+    { property: "og:image" },
+    siteAssetUrl("/social-preview.png"),
+  );
+  ensureMeta(
+    'meta[property="og:image:alt"]',
+    { property: "og:image:alt" },
+    "InstaFetch public Instagram Reel downloader",
+  );
   ensureMeta('meta[name="twitter:card"]', { name: "twitter:card" }, "summary");
   ensureMeta(
     'meta[name="twitter:title"]',
@@ -91,6 +101,16 @@ export function applyPageMetadata(path: string, locale: Locale) {
     'meta[name="twitter:description"]',
     { name: "twitter:description" },
     metadata.description,
+  );
+  ensureMeta(
+    'meta[name="twitter:image"]',
+    { name: "twitter:image" },
+    siteAssetUrl("/social-preview.png"),
+  );
+  ensureMeta(
+    'meta[name="twitter:image:alt"]',
+    { name: "twitter:image:alt" },
+    "InstaFetch public Instagram Reel downloader",
   );
   ensureLink('link[rel="canonical"]', "canonical", url);
 }

@@ -68,7 +68,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 Frontend variable:
 
 - `VITE_API_BASE_URL`: the API origin used at build time, such as the Render service URL.
-- `VITE_SITE_URL`: the bare frontend origin used for canonical and social metadata. It defaults to `https://instafetch.pages.dev`; set it to the custom domain before a custom-domain build.
+- `VITE_SITE_URL`: the bare frontend origin used for canonical, social metadata, JSON-LD, robots.txt, sitemap.xml, and social assets. It defaults to `https://instafetch.pages.dev`; set it to the custom domain before a custom-domain build.
 - `VITE_ANALYTICS_ENABLED`: optional privacy-safe event sink switch. It defaults to `false`; no analytics events leave the browser unless explicitly enabled by a future sink integration.
 
 `WEB_ORIGIN` uses a comma-separated list of exact browser origins, for example `https://instafetch.pages.dev,https://instafetch.example`. Do not include paths, credentials, wildcards, or trailing route fragments. When a custom frontend domain is added, add that exact origin to `WEB_ORIGIN` and set the same origin in `VITE_SITE_URL` for the next Pages build.

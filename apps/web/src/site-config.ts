@@ -27,3 +27,9 @@ export function normalizeSiteUrl(value: string | undefined): string {
 const buildSiteUrl = typeof import.meta.env === 'object' ? import.meta.env.VITE_SITE_URL : undefined;
 
 export const SITE_URL = normalizeSiteUrl(buildSiteUrl);
+
+/** Build an absolute URL for a static site asset from the configured origin. */
+export function siteAssetUrl(path: string, siteUrl = SITE_URL): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${siteUrl}${normalizedPath}`;
+}
