@@ -414,10 +414,17 @@ export class MediaMaterializer {
         throw new MediaMaterializationError('UPSTREAM_INVALID_CONTENT', 'The muxed media has no video and audio streams');
       }
       const outputBytes = await stat(outputPart).then((result) => result.size);
-      if (outputBytes === 0 || outputBytes > this.maxFileBytes || this.totalBytes + outputBytes > this.maxTotalBytes) {
+      if (outputBytes === 0 || outputBytes > this.maxFileBytes) {
         throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The materialized media exceeds the size limit');
       }
       await rename(outputPart, outputPath);
+      // Re-check immediately after the rename. The synchronous cache update
+      // below makes this aggregate limit safe when two operations finish at
+      // the same time.
+      const filesForResolution = [...this.cache.values()].filter((entry) => entry.resolutionId === resolutionId).length;
+      if (filesForResolution >= this.maxFilesPerResolution || this.totalBytes + outputBytes > this.maxTotalBytes) {
+        throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The materialized media exceeds the size limit');
+      }
       this.temporaryPaths.delete(outputPart);
       await rm(videoPath, { force: true });
       await rm(audioPath, { force: true });
@@ -455,7 +462,7 @@ export class MediaMaterializer {
     const outputPath = stem;
     try {
       const downloaded = await this.downloadToPath(item.providerUrl, tempPath, item.type === 'video' ? 'video' : 'image');
-      if (!downloaded.kind || this.totalBytes + downloaded.bytes > this.maxTotalBytes) {
+      if (!downloaded.kind) {
         throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The temporary media cache is full');
       }
       if (item.type === 'video' && item.audioCodec) {
@@ -474,6 +481,12 @@ export class MediaMaterializer {
         }
       }
       await rename(tempPath, outputPath);
+      // Re-check after the asynchronous rename so concurrent operations cannot
+      // both pass the aggregate cache limit based on the same stale total.
+      const filesForResolution = [...this.cache.values()].filter((entry) => entry.resolutionId === resolutionId).length;
+      if (filesForResolution >= this.maxFilesPerResolution || this.totalBytes + downloaded.bytes > this.maxTotalBytes) {
+        throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The temporary media cache is full');
+      }
       this.temporaryPaths.delete(tempPath);
       const extension = downloaded.kind === 'video' ? 'mp4' : downloaded.kind === 'jpeg' ? 'jpg' : downloaded.kind;
       const cached: CachedMedia = {

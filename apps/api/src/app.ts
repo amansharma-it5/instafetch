@@ -24,6 +24,12 @@ function requestId(request: express.Request): string {
   return candidate && requestIdPattern.test(candidate) ? candidate : randomUUID();
 }
 
+function isPayloadTooLarge(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { type?: unknown; status?: unknown; statusCode?: unknown };
+  return candidate.type === 'entity.too.large' || candidate.status === 413 || candidate.statusCode === 413;
+}
+
 export function parseAllowedOrigins(configured: string | undefined, isProduction: boolean): Set<string> {
   const values = configured?.split(',').map((origin) => origin.trim()).filter(Boolean) ?? [];
   if (isProduction && values.length === 0) {
@@ -82,6 +88,7 @@ export function createApp(options: AppOptions = {}) {
   const materializer = options.materializer ?? new MediaMaterializer();
   const tokenService = options.tokenService ?? createDefaultTokenService();
   const rateLimitHandler = (_request: express.Request, response: express.Response) => {
+    response.setHeader('Cache-Control', 'no-store');
     response.status(429).json({
       success: false,
       error: {
@@ -133,18 +140,27 @@ export function createApp(options: AppOptions = {}) {
   );
 
   app.get('/health/live', (_request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
     response.status(200).json({ status: 'live' });
   });
 
   app.get('/health/ready', (_request, response) => {
     const instagramAvailable = provider.isAvailable();
     const ready = instagramAvailable && Boolean(tokenService);
+    response.setHeader('Cache-Control', 'no-store');
     response.status(ready ? 200 : 503).json({
       status: ready ? 'ready' : 'not_ready',
       providers: {
         instagram: instagramAvailable,
       },
     });
+  });
+
+  // Resolution records, tokens, and temporary media must never be cached by
+  // browsers or shared intermediaries.
+  app.use('/api', (_request, response, next) => {
+    response.setHeader('Cache-Control', 'no-store');
+    next();
   });
 
   app.use(
@@ -176,12 +192,20 @@ export function createApp(options: AppOptions = {}) {
   });
   app.use('/api', createMediaRouter({ store, materializer, tokenService, previewRateLimiter, downloadRateLimiter }));
 
+  // Keep unknown API paths on the same safe JSON contract as known failures.
+  app.use((_request, _response, next) => {
+    next(new ApiError('INTERNAL_ERROR', 'The request could not be processed', 404));
+  });
+
   app.use((error: unknown, request: express.Request, response: express.Response, _next: express.NextFunction) => {
     const apiError = error instanceof ApiError
       ? error
+      : isPayloadTooLarge(error)
+        ? new ApiError('INTERNAL_ERROR', 'The request payload is too large', 413)
       : error instanceof SyntaxError
         ? new ApiError('INVALID_INSTAGRAM_URL', 'Enter a valid JSON request body', 400)
       : new ApiError('INTERNAL_ERROR', 'The request could not be processed', 500);
+    response.setHeader('Cache-Control', 'no-store');
     logger.warn({ requestId: response.getHeader('X-Request-Id'), route: request.path, status: apiError.statusCode, code: apiError.code }, 'request rejected');
     response.status(apiError.statusCode).json({
       success: false,

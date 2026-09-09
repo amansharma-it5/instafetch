@@ -110,6 +110,7 @@ The API keeps expensive public-media work bounded for the free hosting footprint
 - A single source or materialized output is limited to 100 MB. The in-memory temporary media cache is limited to 500 MB and 50 files per resolution.
 - Resolution records, media files, and HMAC preview/download tokens expire after 5 minutes. Resolution storage is capped at 100 jobs and 100 items per job. Upstream redirects are limited to three hops.
 - At most two independent media materialization operations (including FFmpeg work) run at once. There is no queue; additional requests receive `SERVER_BUSY` and can be retried shortly.
+- API JSON responses, health responses, and temporary preview/download media use `Cache-Control: no-store` so short-lived tokens and files are not retained by shared caches.
 - Expired cache entries are cleaned at most every 60 seconds and all temporary files are removed when the API shuts down. Render's filesystem is ephemeral by design; no permanent user files are expected.
 
 Default request limits are 60 requests/minute globally, 10 resolve requests/minute, 60 preview requests/minute, and 20 download requests/minute per client. These limits protect the provider and the small instance; they are not a guarantee of Instagram availability.
@@ -117,3 +118,4 @@ Default request limits are 60 requests/minute globally, 10 resolve requests/minu
 ## Security and availability
 
 Only public Instagram URLs are accepted. The API validates canonical Instagram routes, uses fixed `spawn(..., { shell: false })` provider arguments, blocks arbitrary proxying, rate-limits requests, and keeps upstream media URLs server-side. Download and preview links are short-lived HMAC tokens. Instagram availability can change, and some public posts may still require login or fail anonymous extraction.
+Unknown API paths return a safe JSON 404 response, and oversized JSON request bodies are rejected with a bounded 413 response.

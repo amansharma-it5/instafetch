@@ -37,6 +37,7 @@ describe('POST /api/instagram/resolve', () => {
     const response = await request(appFor(provider)).post('/api/instagram/resolve').send({ url: reelUrl });
 
     expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
     expect(response.body.success).toBe(true);
     expect(response.body.data).toMatchObject({
       sourceType: 'reel',
@@ -98,6 +99,22 @@ describe('POST /api/instagram/resolve', () => {
       .send('{"url":');
     expect(malformed.status).toBe(400);
     expect(malformed.body.error.code).toBe('INVALID_INSTAGRAM_URL');
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it('returns a safe 413 response for oversized JSON requests', async () => {
+    const provider = vi.fn(async () => reelMetadata);
+    const response = await request(appFor(provider))
+      .post('/api/instagram/resolve')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ url: 'x'.repeat(9_000) }));
+
+    expect(response.status).toBe(413);
+    expect(response.body).toEqual({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'The request payload is too large' },
+    });
+    expect(response.headers['cache-control']).toBe('no-store');
     expect(provider).not.toHaveBeenCalled();
   });
 
