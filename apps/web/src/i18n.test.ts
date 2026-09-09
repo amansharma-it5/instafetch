@@ -1,0 +1,45 @@
+import { describe, expect, it } from "vitest";
+import { hasTranslation, translate } from "./i18n";
+
+describe("locale messages", () => {
+  it("defaults to accurate English status meanings", () => {
+    expect(translate("en", "supported.reels.status")).toBe("Verified");
+    expect(translate("en", "supported.photo.status")).not.toBe("Verified");
+  });
+
+  it("keeps verified and conditional labels distinct in Spanish and French", () => {
+    expect(translate("es", "supported.reels.status")).toBe("Verificado");
+    expect(translate("es", "supported.photo.status")).not.toBe("Verificado");
+    expect(translate("fr", "supported.reels.status")).toBe("Vérifié");
+    expect(translate("fr", "supported.carousel.status")).not.toBe("Vérifié");
+  });
+
+  it("provides localized error copy without falling back to English", () => {
+    const errorCodes = [
+      "INVALID_INSTAGRAM_URL",
+      "PRIVATE_OR_UNAVAILABLE",
+      "LOGIN_REQUIRED",
+      "RATE_LIMITED",
+      "SERVER_BUSY",
+      "EXTRACTION_TIMEOUT",
+      "EXTRACTION_FAILED",
+      "PROVIDER_UNAVAILABLE",
+      "PROVIDER_MALFORMED_RESPONSE",
+      "NETWORK_FAILURE",
+      "INVALID_TOKEN",
+      "EXPIRED_TOKEN",
+      "MEDIA_NOT_FOUND",
+      "MEDIA_UNAVAILABLE",
+      "MEDIA_TOO_LARGE",
+      "UPSTREAM_TIMEOUT",
+      "UPSTREAM_INVALID_CONTENT",
+      "DOWNLOAD_FAILED",
+      "fallback",
+    ];
+    for (const locale of ["es", "fr"] as const) {
+      for (const code of errorCodes) {
+        expect(hasTranslation(locale, `error.${code}`)).toBe(true);
+      }
+    }
+  });
+});
