@@ -444,6 +444,25 @@ const messages: Record<Locale, Record<string, string>> = {
     "meta.contact.title": "Contacto · InstaFetch",
     "meta.contact.description":
       "Orientación para contactar sobre problemas con InstaFetch.",
+    "error.INVALID_INSTAGRAM_URL": "Ese enlace no parece una URL pública de Instagram compatible.",
+    "error.PRIVATE_OR_UNAVAILABLE": "Esta publicación es privada o no está disponible. Solo se puede descargar contenido público.",
+    "error.LOGIN_REQUIRED": "Esta publicación no está disponible para descarga anónima. Instagram puede requerir iniciar sesión.",
+    "error.RATE_LIMITED": "El servicio está ocupado. Espera un momento e inténtalo de nuevo.",
+    "error.SERVER_BUSY": "El servidor está ocupado. Inténtalo de nuevo en unos momentos.",
+    "error.EXTRACTION_TIMEOUT": "La comprobación del contenido público tardó demasiado. Inténtalo de nuevo.",
+    "error.EXTRACTION_FAILED": "No pudimos resolver ese contenido. La disponibilidad depende de lo que Instagram exponga sin iniciar sesión.",
+    "error.PROVIDER_UNAVAILABLE": "El servicio de medios no está disponible temporalmente. Inténtalo de nuevo pronto.",
+    "error.PROVIDER_MALFORMED_RESPONSE": "Ese enlace no devolvió un resultado de contenido público utilizable.",
+    "error.NETWORK_FAILURE": "No pudimos conectar con InstaFetch. Comprueba tu conexión e inténtalo de nuevo.",
+    "error.INVALID_TOKEN": "Este enlace de vista previa no es válido. Resuelve la publicación de nuevo.",
+    "error.EXPIRED_TOKEN": "Este enlace de descarga ha caducado. Resuelve la publicación de nuevo.",
+    "error.MEDIA_NOT_FOUND": "Este contenido ya no está en la ventana temporal de descarga.",
+    "error.MEDIA_UNAVAILABLE": "Este contenido ya no está disponible. Resuelve el enlace de nuevo.",
+    "error.MEDIA_TOO_LARGE": "El archivo supera el límite de procesamiento seguro.",
+    "error.UPSTREAM_TIMEOUT": "La preparación del contenido tardó demasiado. Inténtalo de nuevo.",
+    "error.UPSTREAM_INVALID_CONTENT": "El proveedor no devolvió un archivo de contenido válido.",
+    "error.DOWNLOAD_FAILED": "No se pudo preparar la descarga. Resuelve el enlace de nuevo e inténtalo.",
+    "error.fallback": "Algo salió mal. Inténtalo de nuevo.",
   },
   fr: {
     language: "Langue",
@@ -644,11 +663,34 @@ const messages: Record<Locale, Record<string, string>> = {
     "meta.contact.title": "Contact · InstaFetch",
     "meta.contact.description":
       "Conseils pour signaler un problème avec InstaFetch.",
+    "error.INVALID_INSTAGRAM_URL": "Ce lien ne ressemble pas à une URL Instagram publique compatible.",
+    "error.PRIVATE_OR_UNAVAILABLE": "Cette publication est privée ou indisponible. Seul le contenu public peut être téléchargé.",
+    "error.LOGIN_REQUIRED": "Cette publication n’est pas disponible pour un téléchargement anonyme. Instagram peut demander une connexion.",
+    "error.RATE_LIMITED": "Le service est occupé. Attendez un instant puis réessayez.",
+    "error.SERVER_BUSY": "Le serveur est occupé. Réessayez dans un moment.",
+    "error.EXTRACTION_TIMEOUT": "La vérification du média public a expiré. Réessayez.",
+    "error.EXTRACTION_FAILED": "Impossible de résoudre ce média. La disponibilité dépend de ce qu’Instagram expose sans connexion.",
+    "error.PROVIDER_UNAVAILABLE": "Le service média est temporairement indisponible. Réessayez bientôt.",
+    "error.PROVIDER_MALFORMED_RESPONSE": "Ce lien n’a pas renvoyé de résultat média public utilisable.",
+    "error.NETWORK_FAILURE": "Impossible de joindre InstaFetch. Vérifiez votre connexion puis réessayez.",
+    "error.INVALID_TOKEN": "Ce lien d’aperçu est invalide. Résolvez à nouveau la publication.",
+    "error.EXPIRED_TOKEN": "Ce lien de téléchargement a expiré. Résolvez à nouveau la publication.",
+    "error.MEDIA_NOT_FOUND": "Ce média n’est plus dans la fenêtre de téléchargement temporaire.",
+    "error.MEDIA_UNAVAILABLE": "Ce média n’est plus disponible. Résolvez à nouveau le lien.",
+    "error.MEDIA_TOO_LARGE": "Le fichier dépasse la limite de traitement sécurisée.",
+    "error.UPSTREAM_TIMEOUT": "La préparation du média a expiré. Réessayez.",
+    "error.UPSTREAM_INVALID_CONTENT": "Le fournisseur n’a pas renvoyé de fichier média valide.",
+    "error.DOWNLOAD_FAILED": "Le téléchargement n’a pas pu être préparé. Résolvez le lien et réessayez.",
+    "error.fallback": "Une erreur s’est produite. Réessayez.",
   },
 };
 
 export function translate(locale: Locale, key: string): string {
   return messages[locale][key] ?? messages.en[key] ?? key;
+}
+
+export function hasTranslation(locale: Locale, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(messages[locale], key);
 }
 
 function readStoredLocale(): Locale {
