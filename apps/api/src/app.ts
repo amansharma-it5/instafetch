@@ -10,19 +10,43 @@ import type { InstagramExtractionProvider } from './services/extraction/Instagra
 import { InstagramProviderChain } from './services/extraction/provider-chain.js';
 import { MediaMaterializer } from './services/media/media-materializer.js';
 import { ResolutionStore } from './services/store/resolution-store.js';
-import { DownloadTokenService } from './services/tokens/download-tokens.js';
+import { DownloadTokenService, isSecureDownloadTokenSecret } from './services/tokens/download-tokens.js';
 
 const logger = pino({
   redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'],
 });
 
 function allowedOrigins(): Set<string> {
-  return new Set(
-    (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter(Boolean),
-  );
+  const isProduction = process.env.NODE_ENV === 'production';
+  const configured = isProduction
+    ? process.env.WEB_ORIGIN?.trim()
+    : process.env.WEB_ORIGIN?.trim() || process.env.CORS_ORIGIN?.trim() || 'http://localhost:5173';
+  const values = configured?.split(',').map((origin) => origin.trim()).filter(Boolean) ?? [];
+  if (isProduction && values.length === 0) {
+    throw new Error('WEB_ORIGIN must be configured in production');
+  }
+  if (values.includes('*')) {
+    throw new Error('Wildcard CORS origins are not allowed');
+  }
+
+  const normalized = values.map((origin) => {
+    let parsed: URL;
+    try {
+      parsed = new URL(origin);
+    } catch {
+      throw new Error('WEB_ORIGIN must contain valid HTTP(S) origins');
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)
+      || parsed.username
+      || parsed.password
+      || parsed.pathname !== '/'
+      || parsed.search
+      || parsed.hash) {
+      throw new Error('WEB_ORIGIN must contain valid HTTP(S) origins');
+    }
+    return parsed.origin;
+  });
+  return new Set(normalized);
 }
 
 export interface AppOptions {
@@ -53,6 +77,9 @@ export function createApp(options: AppOptions = {}) {
   };
 
   app.disable('x-powered-by');
+  // Render terminates TLS at one known proxy hop. Trusting exactly one hop keeps
+  // forwarded HTTPS and client IP headers useful without trusting arbitrary proxies.
+  app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
   // The browser receives media from this API on a different local origin than Vite.
   // Keep the default Helmet protections while allowing those token-gated media responses.
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -84,8 +111,9 @@ export function createApp(options: AppOptions = {}) {
 
   app.get('/health/ready', (_request, response) => {
     const instagramAvailable = provider.isAvailable();
-    response.status(instagramAvailable ? 200 : 503).json({
-      status: instagramAvailable ? 'ready' : 'not_ready',
+    const ready = instagramAvailable && Boolean(tokenService);
+    response.status(ready ? 200 : 503).json({
+      status: ready ? 'ready' : 'not_ready',
       providers: {
         instagram: instagramAvailable,
       },
@@ -137,7 +165,7 @@ export function createApp(options: AppOptions = {}) {
 
 function createDefaultTokenService(): DownloadTokenService | undefined {
   const configured = process.env.DOWNLOAD_TOKEN_SECRET?.trim();
-  if (configured && configured.length >= 32) {
+  if (isSecureDownloadTokenSecret(configured)) {
     return new DownloadTokenService(configured);
   }
   if (process.env.NODE_ENV === 'test') {

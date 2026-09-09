@@ -38,6 +38,11 @@ export interface DownloadTokenServiceOptions {
   now?: () => number;
 }
 
+export function isSecureDownloadTokenSecret(secret: string | undefined): secret is string {
+  const value = secret?.trim() ?? '';
+  return value.length >= 32 && !/^(?:replace-with|change-me|test-only)/i.test(value);
+}
+
 export class DownloadTokenService {
   private readonly secret: Buffer;
   private readonly ttlMs: number;
