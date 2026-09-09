@@ -15,10 +15,31 @@ describe("locale messages", () => {
   });
 
   it("provides localized error copy without falling back to English", () => {
+    const errorCodes = [
+      "INVALID_INSTAGRAM_URL",
+      "PRIVATE_OR_UNAVAILABLE",
+      "LOGIN_REQUIRED",
+      "RATE_LIMITED",
+      "SERVER_BUSY",
+      "EXTRACTION_TIMEOUT",
+      "EXTRACTION_FAILED",
+      "PROVIDER_UNAVAILABLE",
+      "PROVIDER_MALFORMED_RESPONSE",
+      "NETWORK_FAILURE",
+      "INVALID_TOKEN",
+      "EXPIRED_TOKEN",
+      "MEDIA_NOT_FOUND",
+      "MEDIA_UNAVAILABLE",
+      "MEDIA_TOO_LARGE",
+      "UPSTREAM_TIMEOUT",
+      "UPSTREAM_INVALID_CONTENT",
+      "DOWNLOAD_FAILED",
+      "fallback",
+    ];
     for (const locale of ["es", "fr"] as const) {
-      expect(hasTranslation(locale, "error.LOGIN_REQUIRED")).toBe(true);
-      expect(hasTranslation(locale, "error.RATE_LIMITED")).toBe(true);
-      expect(hasTranslation(locale, "error.DOWNLOAD_FAILED")).toBe(true);
+      for (const code of errorCodes) {
+        expect(hasTranslation(locale, `error.${code}`)).toBe(true);
+      }
     }
   });
 });
