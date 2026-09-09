@@ -1,0 +1,267 @@
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
+import {
+  ArrowDownToLine,
+  ArrowRight,
+  Camera,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  Clipboard,
+  Clock3,
+  Download,
+  FileImage,
+  Film,
+  Globe2,
+  Link2,
+  LoaderCircle,
+  Menu,
+  Play,
+  ShieldCheck,
+  Smartphone,
+  Sparkles,
+  Trash2,
+  X,
+  Zap,
+} from 'lucide-react';
+import { parseInstagramUrl } from '@instafetch/shared';
+import { ApiClientError, mediaUrl, resolveInstagram, type ResolveData, type ResolveMediaItem } from './api';
+
+const navigation = [
+  { label: 'Video', href: '/#supported-video' },
+  { label: 'Photo', href: '/#supported-photo' },
+  { label: 'Reels', href: '/#supported-reels' },
+  { label: 'Story', href: '/#supported-story' },
+  { label: 'Carousel', href: '/#supported-carousel' },
+  { label: 'FAQ', href: '/#faq' },
+];
+
+const errorMessages: Record<string, string> = {
+  INVALID_INSTAGRAM_URL: 'That link does not look like a supported public Instagram URL.',
+  PRIVATE_OR_UNAVAILABLE: 'This post is private or is no longer available.',
+  LOGIN_REQUIRED: 'This post is not available for anonymous download. Instagram may require login for this content.',
+  RATE_LIMITED: 'The service is busy right now. Please wait a moment and try again.',
+  EXTRACTION_TIMEOUT: 'The media took too long to resolve. Please try again.',
+  EXTRACTION_FAILED: 'We could not resolve media from that link. Availability depends on what Instagram exposes publicly without login.',
+  PROVIDER_UNAVAILABLE: 'The media provider is temporarily unavailable.',
+  PROVIDER_MALFORMED_RESPONSE: 'That link did not return a usable public media result.',
+  NETWORK_FAILURE: 'We could not reach InstaFetch. Check your connection and try again.',
+  INVALID_TOKEN: 'This preview link is invalid. Resolve the post again to create a fresh link.',
+  EXPIRED_TOKEN: 'This download link has expired. Resolve the post again to create a fresh link.',
+  MEDIA_NOT_FOUND: 'This media is no longer in the temporary download window.',
+  MEDIA_UNAVAILABLE: 'This media is no longer available from Instagram.',
+  MEDIA_TOO_LARGE: 'This file is too large to prepare safely.',
+  UPSTREAM_TIMEOUT: 'The media provider timed out. Please try again.',
+  UPSTREAM_INVALID_CONTENT: 'The provider did not return a valid media file.',
+  DOWNLOAD_FAILED: 'The download could not be prepared. Please resolve the link again.',
+};
+
+type DownloaderState =
+  | { status: 'empty' | 'ready' }
+  | { status: 'processing' }
+  | { status: 'success'; data: ResolveData }
+  | { status: 'error'; code: string; message: string };
+
+function userMessage(code: string, fallback?: string): string {
+  return errorMessages[code] ?? fallback ?? 'Something went wrong. Please try again.';
+}
+
+function useDownloader() {
+  const [value, setValue] = useState('');
+  const [state, setState] = useState<DownloaderState>({ status: 'empty' });
+  const controller = useRef<AbortController | null>(null);
+
+  useEffect(() => () => controller.current?.abort(), []);
+
+  const onChange = (next: string) => {
+    controller.current?.abort();
+    setValue(next);
+    setState({ status: next.trim() ? 'ready' : 'empty' });
+  };
+
+  const submit = async (event?: FormEvent) => {
+    event?.preventDefault();
+    if (state.status === 'processing') return;
+    let canonicalUrl: string;
+    try {
+      canonicalUrl = parseInstagramUrl(value.trim()).canonicalUrl;
+    } catch {
+      setState({ status: 'error', code: 'INVALID_INSTAGRAM_URL', message: userMessage('INVALID_INSTAGRAM_URL') });
+      return;
+    }
+
+    controller.current?.abort();
+    const nextController = new AbortController();
+    controller.current = nextController;
+    setValue(canonicalUrl);
+    setState({ status: 'processing' });
+    try {
+      const response = await resolveInstagram(canonicalUrl, nextController.signal);
+      if (response.data.items.length === 0) {
+        setState({ status: 'error', code: 'PROVIDER_MALFORMED_RESPONSE', message: userMessage('PROVIDER_MALFORMED_RESPONSE') });
+      } else {
+        setState({ status: 'success', data: response.data });
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (error instanceof ApiClientError) {
+        setState({ status: 'error', code: error.code, message: userMessage(error.code, error.message) });
+      } else {
+        setState({ status: 'error', code: 'NETWORK_FAILURE', message: userMessage('NETWORK_FAILURE') });
+      }
+    }
+  };
+
+  const clear = () => {
+    controller.current?.abort();
+    setValue('');
+    setState({ status: 'empty' });
+  };
+
+  return { value, state, onChange, submit, clear };
+}
+
+function Header() {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  return (
+    <header className="site-header">
+      <div className="site-header__inner">
+        <Link className="brand" to="/" onClick={close} aria-label="InstaFetch home">
+          <span className="brand__mark" aria-hidden="true"><Camera size={18} strokeWidth={2.5} /></span>
+          <span>InstaFetch</span>
+        </Link>
+        <nav aria-label="Primary navigation" className="desktop-nav">
+          {navigation.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}
+        </nav>
+        <div className="header-actions">
+          <label className="language-picker">
+            <Globe2 aria-hidden="true" size={15} />
+            <span className="sr-only">Language</span>
+            <select aria-label="Language" defaultValue="en">
+              <option value="en">EN</option><option value="es">ES</option><option value="fr">FR</option>
+            </select>
+          </label>
+          <button aria-expanded={open} aria-label={open ? 'Close menu' : 'Open menu'} className="menu-button" onClick={() => setOpen((current) => !current)} type="button">
+            {open ? <X aria-hidden="true" size={21} /> : <Menu aria-hidden="true" size={21} />}
+          </button>
+        </div>
+      </div>
+      {open && <nav aria-label="Mobile navigation" className="mobile-nav">{navigation.map((item) => <a href={item.href} key={item.href} onClick={close}>{item.label}</a>)}</nav>}
+    </header>
+  );
+}
+
+function DownloaderPanel({ downloader }: { downloader: ReturnType<typeof useDownloader> }) {
+  const { value, state, onChange, submit, clear } = downloader;
+  const [pasteMessage, setPasteMessage] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const paste = async () => {
+    try {
+      const clipboardValue = await navigator.clipboard.readText();
+      onChange(clipboardValue);
+      setPasteMessage(clipboardValue ? 'Link pasted' : 'Clipboard is empty');
+      inputRef.current?.focus();
+    } catch { setPasteMessage('Allow clipboard access to paste automatically'); }
+  };
+  const isProcessing = state.status === 'processing';
+  const hasValue = value.trim().length > 0;
+  return (
+    <div className="downloader-panel">
+      <form onSubmit={submit}>
+        <label className="input-label" htmlFor="instagram-url">Instagram URL</label>
+        <div className={`url-input ${state.status === 'error' ? 'url-input--error' : ''}`}>
+          <Link2 aria-hidden="true" size={19} />
+          <input aria-describedby="url-help" aria-invalid={state.status === 'error'} autoComplete="url" id="instagram-url" onChange={(event) => { onChange(event.target.value); setPasteMessage(''); }} placeholder="Paste Instagram link here" ref={inputRef} spellCheck="false" type="url" value={value} />
+          {hasValue && <button aria-label="Clear Instagram URL" className="icon-button" onClick={clear} type="button"><X aria-hidden="true" size={18} /></button>}
+        </div>
+         <p className="input-help" id="url-help">Public links only. Availability depends on what Instagram exposes without login.</p>
+        <div className="form-actions">
+          <button className="secondary-button" onClick={paste} type="button"><Clipboard aria-hidden="true" size={17} />Paste</button>
+          <button className="secondary-button secondary-button--clear" disabled={!hasValue || isProcessing} onClick={clear} type="button"><Trash2 aria-hidden="true" size={17} />Clear</button>
+          <button className="primary-button primary-button--submit" disabled={!hasValue || isProcessing} type="submit">{isProcessing ? <LoaderCircle aria-hidden="true" className="spin" size={18} /> : <ArrowDownToLine aria-hidden="true" size={18} />}{isProcessing ? 'Resolving…' : 'Download'}</button>
+        </div>
+        {pasteMessage && <p className="micro-feedback" role="status">{pasteMessage}</p>}
+      </form>
+      <div className="panel-footnote"><ShieldCheck aria-hidden="true" size={16} />Public content only · No login required</div>
+    </div>
+  );
+}
+
+function StatusMessage({ state }: { state: DownloaderState }) {
+  if (state.status === 'processing') return <div aria-live="polite" className="status-card status-card--processing"><LoaderCircle aria-hidden="true" className="spin" size={20} /><span>Checking the public post and preparing available media…</span></div>;
+  if (state.status === 'error') return <div aria-live="assertive" className="status-card status-card--error"><CircleAlert aria-hidden="true" size={20} /><div><strong>We couldn’t fetch that link</strong><span>{state.message}</span></div></div>;
+  return null;
+}
+
+function MediaPreview({ item }: { item: ResolveMediaItem }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <div className="preview-fallback"><CircleAlert aria-hidden="true" size={22} /><span>Preview unavailable</span></div>;
+  if (item.type === 'video') return <video aria-label="Video preview" controls onError={() => setFailed(true)} preload="metadata" src={mediaUrl(item.previewUrl)} />;
+  return <img alt="Instagram photo preview" onError={() => setFailed(true)} src={mediaUrl(item.previewUrl)} />;
+}
+
+function MediaCard({ item, index, total }: { item: ResolveMediaItem; index: number; total: number }) {
+  return <article className="media-card"><div className="media-card__preview"><MediaPreview item={item} /></div><div className="media-card__body"><div className="media-card__topline"><span className={`media-badge ${item.type === 'video' ? 'media-badge--video' : 'media-badge--photo'}`}>{item.type === 'video' ? <Film aria-hidden="true" size={14} /> : <FileImage aria-hidden="true" size={14} />}{item.type === 'video' ? 'Video' : 'Photo'}</span>{total > 1 && <span className="item-number">Item {index + 1} of {total}</span>}</div><div className="media-card__meta"><strong>{item.qualityLabel !== 'unknown' ? item.qualityLabel : 'Original quality'}</strong><span>{item.extension.toUpperCase()}{item.width && item.height ? ` · ${item.width}×${item.height}` : ''}</span></div><a className="download-link" download href={mediaUrl(item.downloadUrl)}><Download aria-hidden="true" size={17} />Download {item.type === 'video' ? 'video' : 'photo'}</a></div></article>;
+}
+
+function Results({ data }: { data: ResolveData }) {
+  const itemCount = data.itemCount ?? data.items.length;
+  const resolvedItemCount = data.resolvedItemCount ?? data.items.length;
+  const isPartial = data.partial === true || resolvedItemCount < itemCount;
+  return <section aria-labelledby="results-heading" aria-live="polite" className="results-section" id="results"><div className="results-heading-row"><div><p className="eyebrow eyebrow--purple">Ready to download</p><h2 id="results-heading">{data.isCarousel ? (isPartial ? `${resolvedItemCount} of ${itemCount} items available` : `${itemCount} items found`) : 'Your media is ready'}</h2><p className="results-subtitle">{data.author ? `Shared by ${data.author}` : 'Public Instagram media'}{data.title ? ` · ${data.title}` : ''}</p></div><span className="result-type"><Check aria-hidden="true" size={15} />{data.sourceType}</span></div>{isPartial && <div aria-live="polite" className="partial-warning" role="status"><CircleAlert aria-hidden="true" size={18} /><span>{data.warning ?? 'Some carousel items were unavailable.'}</span></div>}<div className={`media-grid ${data.items.length > 1 ? 'media-grid--carousel' : ''}`}>{data.items.map((item, index) => <MediaCard index={index} item={item} key={item.id} total={resolvedItemCount} />)}</div></section>;
+}
+
+const benefits = [
+  { icon: Zap, title: 'Quick processing', text: 'A focused flow that gets from link to media with less waiting.' },
+  { icon: Smartphone, title: 'Made for every screen', text: 'A comfortable downloader on phones, tablets, and desktops.' },
+  { icon: Sparkles, title: 'Source quality', text: 'We show the best legitimate media format the provider exposes.' },
+  { icon: ShieldCheck, title: 'Privacy focused', text: 'No Instagram login, password, or browser cookies are requested.' },
+];
+
+const supported = [
+  { id: 'supported-video', icon: Film, status: 'Supported when publicly accessible', title: 'Instagram Video Downloader', text: 'Public video media can be downloaded when Instagram exposes a genuine file without login.' },
+  { id: 'supported-photo', icon: FileImage, status: 'Limited / depends on Instagram access', title: 'Instagram Photo Downloader', text: 'Photo availability varies by post and by the media Instagram exposes anonymously.' },
+  { id: 'supported-reels', icon: Play, status: 'Verified', title: 'Instagram Reels Downloader', text: 'Public Reels are verified with real previews and downloadable media.' },
+  { id: 'supported-story', icon: Clock3, status: 'Limited / compatibility varies', title: 'Instagram Story Downloader', text: 'A public Story works only when it is accessible without authentication.' },
+  { id: 'supported-carousel', icon: Camera, status: 'Limited / compatibility varies', title: 'Instagram Carousel Downloader', text: 'Items are shown individually when the public provider exposes each asset.' },
+];
+
+const faqs = [
+  ['What can InstaFetch download?', 'Public Reels are verified. Public video media, photos, carousels, Stories, and legacy TV links are conditional on anonymous availability.'],
+  ['Why can a public post still fail?', 'A post can be visible in a browser and still require login or fail to expose a downloadable asset to anonymous tools.'],
+  ['Why do Reels work when some photos do not?', 'Instagram exposes different media formats for different post types. Anonymous access can work for a Reel while an image post still requires login.'],
+  ['Does InstaFetch use my Instagram login?', 'No. InstaFetch does not request or use Instagram passwords, cookies, browser profiles, or authentication tokens.'],
+  ['Can private posts be downloaded?', 'No. InstaFetch does not bypass private accounts or access controls.'],
+  ['What quality will I get?', 'We select the best legitimate format returned by the public media provider. The available resolution is shown on each result card.'],
+  ['Does it work on mobile?', 'Yes. The interface is designed for touch screens and the resulting files can be saved or shared from supported mobile browsers.'],
+  ['Why can availability change over time?', 'Instagram availability, rate limits, and the formats exposed to anonymous requests can change. InstaFetch reports the current result without bypassing those limits.'],
+  ['How long do links last?', 'Preview and download links are short lived. Resolve the Instagram URL again if a link has expired.'],
+];
+
+function HomePage() {
+  const downloader = useDownloader();
+  return <><main><section className="hero-section"><div className="hero-orb hero-orb--one" aria-hidden="true" /><div className="hero-orb hero-orb--two" aria-hidden="true" /><div className="hero-content"><div className="hero-copy"><span className="hero-kicker"><span className="pulse-dot" aria-hidden="true" />Public media, made simple</span><h1>Instagram<br /><em>Downloader</em></h1><p>Turn a public Instagram link into a clear preview and a genuine download when the media is available anonymously.</p><div className="hero-points"><span><Check aria-hidden="true" size={15} />No login</span><span><Check aria-hidden="true" size={15} />Best available quality</span><span><Check aria-hidden="true" size={15} />Carousel items when available</span></div></div><div className="hero-tool-wrap"><DownloaderPanel downloader={downloader} /><StatusMessage state={downloader.state} /></div></div></section>{downloader.state.status === 'success' && <Results data={downloader.state.data} />}<section aria-label="InstaFetch principles" className="trust-strip"><div><ShieldCheck aria-hidden="true" size={19} /><span><strong>Public by design</strong><small>No private-account access</small></span></div><div><Zap aria-hidden="true" size={19} /><span><strong>Real media only</strong><small>No placeholder links</small></span></div><div><Globe2 aria-hidden="true" size={19} /><span><strong>Ready anywhere</strong><small>Availability can vary</small></span></div></section><section className="content-section how-section" id="how-it-works"><div className="section-intro"><p className="eyebrow">How it works</p><h2>From link to saved media, without the clutter.</h2><p>Three small steps keep the experience clear and let you stay in control of what gets downloaded.</p></div><div className="steps-grid">{[['01', 'Copy the link', 'Copy the URL of a public Instagram post, Reel, photo, or carousel.'], ['02', 'Paste it here', 'Drop the link into InstaFetch and let the public media provider check anonymous availability.'], ['03', 'Preview and download', 'Check each available result, then save the genuine media you need.']].map(([number, title, text]) => <div className="step-card" key={number}><span className="step-number">{number}</span><div><h3>{title}</h3><p>{text}</p></div><ArrowRight aria-hidden="true" className="step-arrow" size={19} /></div>)}</div></section><section className="benefits-section"><div className="content-section"><div className="section-intro section-intro--light"><p className="eyebrow eyebrow--light">A better save flow</p><h2>Useful by default.</h2><p>InstaFetch keeps the important details visible and the path to a download short.</p></div><div className="benefit-grid">{benefits.map(({ icon: Icon, title, text }) => <div className="benefit-card" key={title}><span className="benefit-icon"><Icon aria-hidden="true" size={20} /></span><h3>{title}</h3><p>{text}</p></div>)}</div></div></section><section className="content-section supported-section" id="supported"><div className="section-intro"><p className="eyebrow">Supported content</p><h2>Bring the link. We’ll show what’s really there.</h2><p>Each supported format gets its own clear result state and download action.</p></div><div className="supported-grid">{supported.map(({ id, icon: Icon, title, text, status }) => <article className="supported-card" id={id} key={id}><div className="supported-card__head"><span className="supported-icon"><Icon aria-hidden="true" size={21} /></span><span className={`support-status ${status === 'Verified' ? 'support-status--verified' : 'support-status--conditional'}`}>{status}</span></div><h3>{title}</h3><p>{text}</p><a href="#how-it-works">Learn how it works <ArrowRight aria-hidden="true" size={15} /></a></article>)}</div></section><section className="faq-section" id="faq"><div className="content-section faq-layout"><div className="section-intro"><p className="eyebrow">Questions, answered</p><h2>Good to know before you download.</h2><p>Clear expectations help public-media tools stay useful and responsible.</p></div><FaqList /></div></section><section className="closing-section"><div><span className="hero-kicker hero-kicker--dark"><Sparkles aria-hidden="true" size={15} />Ready when you are</span><h2>Have a public link?</h2><p>Bring it back to the top and start a fresh preview.</p></div><a className="primary-button" href="#top">Start downloading <ArrowRight aria-hidden="true" size={18} /></a></section></main><Footer /></>;
+}
+
+function FaqList() {
+  const [open, setOpen] = useState<number | null>(0);
+  return <div className="faq-list">{faqs.map(([question, answer], index) => <div className={`faq-item ${open === index ? 'faq-item--open' : ''}`} key={question}><h3><button aria-controls={`faq-answer-${index}`} aria-expanded={open === index} onClick={() => setOpen(open === index ? null : index)} type="button"><span>{question}</span><ChevronDown aria-hidden="true" size={19} /></button></h3><div className="faq-answer" hidden={open !== index} id={`faq-answer-${index}`}><p>{answer}</p></div></div>)}</div>;
+}
+
+function Footer() {
+  return <footer className="site-footer"><div className="site-footer__top"><div><Link className="brand brand--footer" to="/"><span className="brand__mark" aria-hidden="true"><Camera size={18} /></span><span>InstaFetch</span></Link><p>Public media, made simple.</p></div><div className="footer-links"><div><strong>Explore</strong>{navigation.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}</div><div><strong>Info</strong><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/contact">Contact</Link></div></div></div><div className="site-footer__bottom"><span>© {new Date().getFullYear()} InstaFetch</span><span>For publicly accessible Instagram content only.</span></div></footer>;
+}
+
+function LegalPage({ kind }: { kind: 'privacy' | 'terms' | 'contact' }) {
+  const copy = kind === 'privacy'
+    ? { title: 'Privacy at InstaFetch', intro: 'InstaFetch is designed to resolve public Instagram links without asking for Instagram account credentials.', sections: [['What we handle', 'When you submit a link, the service processes that URL to request publicly accessible media metadata. Temporary resolution records and materialized files are kept only for the short download window needed to complete the request.'], ['What we do not request', 'We do not ask for Instagram usernames, passwords, browser cookies, private-account access, or authentication tokens. Do not submit confidential information in the URL field.'], ['Service limits', 'Public availability can change at any time. Temporary files and tokens expire automatically, and this page does not promise that every public post will be resolvable.']] }
+    : kind === 'terms'
+      ? { title: 'Terms of use', intro: 'Use InstaFetch responsibly and only with media you are allowed to access and save.', sections: [['Public content only', 'InstaFetch is limited to media that is publicly accessible without authentication. Attempts to access private accounts, bypass controls, or submit credentials are not supported.'], ['Your responsibility', 'You are responsible for respecting copyright, privacy, and the rules that apply to the content and the place where you use downloaded files.'], ['Availability', 'The service may change as Instagram and public providers change. Download links are temporary and may stop working after their expiry window.']] }
+      : { title: 'Contact InstaFetch', intro: 'Have a product question or found a broken public-media flow?', sections: [['Product feedback', 'For this early release, please open an issue in the project repository with the route type, approximate time, and the safe error message you saw. Do not include passwords, cookies, or signed provider URLs.'], ['Responsible reports', 'If a result appears to expose private content or a provider URL, stop using the flow and report the behavior with a redacted description.'], ['Response expectations', 'InstaFetch is a small utility and response times are not guaranteed.']] };
+  return <><main className="legal-page"><div className="legal-page__inner"><p className="eyebrow">InstaFetch</p><h1>{copy.title}</h1><p className="legal-intro">{copy.intro}</p>{copy.sections.map(([title, text]) => <section key={title}><h2>{title}</h2><p>{text}</p></section>)}</div></main><Footer /></>;
+}
+
+export function App() {
+  return <BrowserRouter><div className="app-shell" id="top"><Header /><Routes><Route element={<HomePage />} path="/" /><Route element={<LegalPage kind="privacy" />} path="/privacy" /><Route element={<LegalPage kind="terms" />} path="/terms" /><Route element={<LegalPage kind="contact" />} path="/contact" /></Routes></div></BrowserRouter>;
+}

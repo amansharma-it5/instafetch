@@ -1,0 +1,35 @@
+{
+  "name": "instafetch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "lint": "eslint .",
+    "test": "vitest run --config vitest.config.ts",
+    "build": "npm --workspace @instafetch/shared run build && npm --workspace @instafetch/api run build && npm --workspace @instafetch/web run build",
+    "instagram:feasibility": "tsx scripts/instagram-feasibility.ts",
+    "e2e": "playwright test --config=tests/e2e/playwright.config.ts",
+    "dev:web": "npm --workspace @instafetch/web run dev",
+    "dev:api": "npm --workspace @instafetch/api run dev"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.35.0",
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.3.0",
+    "eslint": "^9.35.0",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.42.0",
+    "vitest": "^3.2.4"
+  }
+}
