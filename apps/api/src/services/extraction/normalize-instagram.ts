@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 const IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
 const VIDEO_EXTENSIONS = new Set(['avi', 'm4v', 'mkv', 'mov', 'mp4', 'webm']);
+const AUDIO_EXTENSIONS = new Set(['aac', 'm4a', 'mp3', 'oga', 'ogg', 'opus', 'wav']);
 
 export type NormalizedMediaType = 'video' | 'photo';
 
@@ -15,6 +16,9 @@ export interface InternalMediaItem {
   qualityLabel: string;
   filesize: number | null;
   providerUrl: string;
+  audioProviderUrl?: string | null;
+  videoCodec?: string | null;
+  audioCodec?: string | null;
   thumbnailUrl: string | null;
 }
 
@@ -65,6 +69,23 @@ function isVideoFormat(format: Record<string, unknown>): boolean {
   return (codec.length > 0 && codec !== 'none') || VIDEO_EXTENSIONS.has(extension);
 }
 
+function codecValue(format: Record<string, unknown>, key: 'vcodec' | 'acodec'): string | null {
+  const value = format[key];
+  return typeof value === 'string' && value.trim().length > 0 && value.toLowerCase() !== 'none'
+    ? value
+    : null;
+}
+
+function isAudioFormat(format: Record<string, unknown>): boolean {
+  const url = stringValue(format.url);
+  if (!url) {
+    return false;
+  }
+  const extension = typeof format.ext === 'string' ? format.ext.toLowerCase() : '';
+  return Boolean(codecValue(format, 'acodec')) && !codecValue(format, 'vcodec')
+    || AUDIO_EXTENSIONS.has(extension);
+}
+
 function isImageFormat(format: Record<string, unknown>): boolean {
   const url = stringValue(format.url);
   if (!url) {
@@ -100,7 +121,11 @@ function compareImageFormats(left: Record<string, unknown>, right: Record<string
   return (dimension(right.height) ?? 0) - (dimension(left.height) ?? 0);
 }
 
-function itemFromFormat(format: Record<string, unknown>, type: NormalizedMediaType): InternalMediaItem | null {
+function itemFromFormat(
+  format: Record<string, unknown>,
+  type: NormalizedMediaType,
+  audioFormat?: Record<string, unknown>,
+): InternalMediaItem | null {
   const providerUrl = stringValue(format.url);
   if (!providerUrl) {
     return null;
@@ -117,8 +142,22 @@ function itemFromFormat(format: Record<string, unknown>, type: NormalizedMediaTy
     qualityLabel: width !== null && height !== null ? `${width}x${height}` : 'unknown',
     filesize: numberValue(format.filesize) ?? numberValue(format.filesize_approx),
     providerUrl,
+    audioProviderUrl: audioFormat ? stringValue(audioFormat.url) : null,
+    videoCodec: codecValue(format, 'vcodec'),
+    audioCodec: codecValue(audioFormat ?? format, 'acodec'),
     thumbnailUrl: stringValue(format.thumbnail),
   };
+}
+
+function compareAudioFormats(left: Record<string, unknown>, right: Record<string, unknown>): number {
+  const bitrateDifference = (numberValue(right.abr) ?? numberValue(right.tbr) ?? 0)
+    - (numberValue(left.abr) ?? numberValue(left.tbr) ?? 0);
+  if (bitrateDifference !== 0) {
+    return bitrateDifference;
+  }
+  const leftM4a = typeof left.ext === 'string' && left.ext.toLowerCase() === 'm4a' ? 1 : 0;
+  const rightM4a = typeof right.ext === 'string' && right.ext.toLowerCase() === 'm4a' ? 1 : 0;
+  return rightM4a - leftM4a;
 }
 
 function normalizeEntry(entry: Record<string, unknown>): InternalMediaItem | null {
@@ -127,9 +166,17 @@ function normalizeEntry(entry: Record<string, unknown>): InternalMediaItem | nul
   if (isVideoFormat(entry)) {
     videoCandidates.push(entry);
   }
+  const combinedFormat = videoCandidates
+    .filter((format) => Boolean(codecValue(format, 'acodec')))
+    .sort(compareVideoFormats)[0];
+  if (combinedFormat) {
+    return itemFromFormat(combinedFormat, 'video');
+  }
+
   const videoFormat = videoCandidates.sort(compareVideoFormats)[0];
   if (videoFormat) {
-    return itemFromFormat(videoFormat, 'video');
+    const audioFormat = formats.filter(isAudioFormat).sort(compareAudioFormats)[0];
+    return itemFromFormat(videoFormat, 'video', audioFormat);
   }
 
   const imageFormat = formats.filter(isImageFormat).sort(compareImageFormats)[0] ?? (isImageFormat(entry) ? entry : undefined);

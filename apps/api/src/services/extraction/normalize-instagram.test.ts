@@ -10,7 +10,7 @@ describe('Instagram metadata normalization', () => {
         { url: 'https://cdn.test/video-low.mov', ext: 'mov', width: 720, height: 1280, vcodec: 'h264' },
         { url: 'https://cdn.test/video-high.mov', ext: 'mov', width: 1080, height: 1920, vcodec: 'h264' },
         { url: 'https://cdn.test/video-high.mp4', ext: 'mp4', width: 1080, height: 1920, vcodec: 'h264', filesize: 1000 },
-        { url: 'https://cdn.test/audio.m4a', ext: 'm4a', vcodec: 'none' },
+        { url: 'https://cdn.test/audio.m4a', ext: 'm4a', vcodec: 'none', acodec: 'mp4a.40.2' },
       ],
     }, 'reel');
 
@@ -23,6 +23,37 @@ describe('Instagram metadata normalization', () => {
       qualityLabel: '1080x1920',
       filesize: 1000,
       providerUrl: 'https://cdn.test/video-high.mp4',
+      audioProviderUrl: 'https://cdn.test/audio.m4a',
+      audioCodec: 'mp4a.40.2',
+    });
+  });
+
+  it('prefers a combined video and audio format when one is exposed', () => {
+    const result = normalizeInstagramMetadata({
+      formats: [
+        { url: 'https://cdn.test/video-only.mp4', ext: 'mp4', width: 1080, height: 1920, vcodec: 'vp9', acodec: 'none' },
+        { url: 'https://cdn.test/combined.mp4', ext: 'mp4', width: 1080, height: 1920, vcodec: 'h264', acodec: 'mp4a.40.2' },
+        { url: 'https://cdn.test/audio.m4a', ext: 'm4a', vcodec: 'none', acodec: 'mp4a.40.2', abr: 128 },
+      ],
+    }, 'reel');
+
+    expect(result.items[0]).toMatchObject({
+      providerUrl: 'https://cdn.test/combined.mp4',
+      audioProviderUrl: null,
+      videoCodec: 'h264',
+      audioCodec: 'mp4a.40.2',
+    });
+  });
+
+  it('keeps a video-only item when no audio candidate exists', () => {
+    const result = normalizeInstagramMetadata({
+      formats: [{ url: 'https://cdn.test/video.webm', ext: 'webm', width: 720, height: 1280, vcodec: 'vp9', acodec: 'none' }],
+    }, 'reel');
+
+    expect(result.items[0]).toMatchObject({
+      providerUrl: 'https://cdn.test/video.webm',
+      audioProviderUrl: null,
+      audioCodec: null,
     });
   });
 

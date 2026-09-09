@@ -9,6 +9,17 @@ import { lookup } from 'node:dns/promises';
 import { pipeline } from 'node:stream/promises';
 import { isIP } from 'node:net';
 import type { InternalMediaItem } from '../extraction/normalize-instagram.js';
+import {
+  buildFfmpegRemuxArgs,
+  buildFfmpegTranscodeArgs,
+  MediaProcessError,
+  resolveFfmpegExecutable,
+  resolveFfprobeExecutable,
+  runFfmpeg,
+  runFfprobe,
+  type MediaProcessOptions,
+  type ProbedMediaStreams,
+} from '../extraction/ffmpeg-process.js';
 
 export type MaterializationFailureCode =
   | 'MEDIA_UNAVAILABLE'
@@ -52,6 +63,10 @@ export interface MediaMaterializerOptions {
   now?: () => number;
   requestUpstream?: RequestUpstream;
   allowedHosts?: (hostname: string) => boolean;
+  ffmpegExecutable?: string;
+  ffprobeExecutable?: string;
+  runFfmpeg?: (args: string[], options: MediaProcessOptions) => Promise<void>;
+  probeMedia?: (path: string, options: MediaProcessOptions) => Promise<ProbedMediaStreams>;
 }
 
 interface CachedMedia extends MaterializedMedia {
@@ -182,6 +197,15 @@ function detectKind(buffer: Buffer): 'video' | 'jpeg' | 'png' | 'webp' | 'gif' |
   return null;
 }
 
+function isAudioContainer(buffer: Buffer): boolean {
+  if (buffer.length >= 8 && buffer.subarray(4, 8).toString('ascii') === 'ftyp') return true;
+  if (buffer.subarray(0, 4).toString('ascii') === 'OggS') return true;
+  if (buffer.subarray(0, 3).toString('ascii') === 'ID3') return true;
+  return buffer.length >= 12
+    && buffer.subarray(0, 4).toString('ascii') === 'RIFF'
+    && buffer.subarray(8, 12).toString('ascii') === 'WAVE';
+}
+
 class BoundedCapture extends Transform {
   private readonly chunks: Buffer[] = [];
   private captured = 0;
@@ -217,6 +241,10 @@ export class MediaMaterializer {
   private readonly now: () => number;
   private readonly requestUpstream: RequestUpstream;
   private readonly allowedHosts: (hostname: string) => boolean;
+  private readonly ffmpegExecutable: string;
+  private readonly ffprobeExecutable: string;
+  private readonly runFfmpeg: (args: string[], options: MediaProcessOptions) => Promise<void>;
+  private readonly probeMedia: (path: string, options: MediaProcessOptions) => Promise<ProbedMediaStreams>;
   private readonly cache = new Map<string, CachedMedia>();
   private readonly locks = new Map<string, Promise<MaterializedMedia>>();
   private readonly temporaryPaths = new Set<string>();
@@ -234,6 +262,10 @@ export class MediaMaterializer {
     this.now = options.now ?? Date.now;
     this.requestUpstream = options.requestUpstream ?? defaultRequestUpstream;
     this.allowedHosts = options.allowedHosts ?? defaultAllowedHost;
+    this.ffmpegExecutable = options.ffmpegExecutable ?? resolveFfmpegExecutable();
+    this.ffprobeExecutable = options.ffprobeExecutable ?? resolveFfprobeExecutable();
+    this.runFfmpeg = options.runFfmpeg ?? ((args, processOptions) => runFfmpeg(args, { ...processOptions, executable: this.ffmpegExecutable }));
+    this.probeMedia = options.probeMedia ?? ((path, processOptions) => runFfprobe(path, { ...processOptions, executable: this.ffprobeExecutable }));
     this.cleanupTimer = setInterval(() => { void this.cleanupExpired(); }, Math.min(this.ttlMs, 60_000));
     this.cleanupTimer.unref();
   }
@@ -269,12 +301,12 @@ export class MediaMaterializer {
     throw new MediaMaterializationError('DOWNLOAD_FAILED', 'The upstream media request failed');
   }
 
-  private async materializeFresh(resolutionId: string, item: InternalMediaItem, expiresAt: number): Promise<MaterializedMedia> {
-    const source = this.assertSourceUrl(item.providerUrl);
-    const existingForResolution = [...this.cache.values()].filter((entry) => entry.resolutionId === resolutionId).length;
-    if (existingForResolution >= this.maxFilesPerResolution) {
-      throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'This resolution has reached its file limit');
-    }
+  private async downloadToPath(
+    sourceUrl: string,
+    targetPath: string,
+    expected: 'video' | 'audio' | 'image',
+  ): Promise<{ bytes: number; kind: 'video' | 'jpeg' | 'png' | 'webp' | 'gif' | 'avif' | null }> {
+    const source = this.assertSourceUrl(sourceUrl);
     const response = await this.requestFollowingRedirects(source.toString());
     if (response.statusCode === 404 || response.statusCode === 410) {
       response.body.resume();
@@ -289,31 +321,158 @@ export class MediaMaterializer {
       response.body.resume();
       throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The upstream media exceeds the size limit');
     }
-    await mkdir(this.rootDir, { recursive: true });
-    const tempPath = join(this.rootDir, `media-${resolutionId}-${item.id}-${Date.now()}.part`);
-    const outputPath = join(this.rootDir, `media-${resolutionId}-${item.id}-${Date.now()}`);
-    this.temporaryPaths.add(tempPath);
+
+    this.temporaryPaths.add(targetPath);
     const capture = new BoundedCapture(this.maxFileBytes);
     try {
-      await pipeline(response.body, capture, createWriteStream(tempPath, { flags: 'wx' }));
-      if (this.totalBytes + capture.bytes > this.maxTotalBytes) {
-        throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The temporary media cache is full');
-      }
+      await pipeline(response.body, capture, createWriteStream(targetPath, { flags: 'wx' }));
       const kind = detectKind(capture.header);
-      const isVideo = kind === 'video';
-      if (!kind || (item.type === 'video' && !isVideo) || (item.type === 'photo' && isVideo)) {
+      const valid = expected === 'audio'
+        ? isAudioContainer(capture.header)
+        : expected === 'video'
+          ? kind === 'video'
+          : kind !== null && kind !== 'video';
+      if (!valid) {
         throw new MediaMaterializationError('UPSTREAM_INVALID_CONTENT', 'The upstream response is not valid media');
       }
-      await rename(tempPath, outputPath);
-      this.temporaryPaths.delete(tempPath);
-      const extension = kind === 'video' ? 'mp4' : kind === 'jpeg' ? 'jpg' : kind;
+      return { bytes: capture.bytes, kind: expected === 'audio' ? null : kind };
+    } catch (error) {
+      await rm(targetPath, { force: true }).catch(() => undefined);
+      throw error instanceof MediaMaterializationError
+        ? error
+        : new MediaMaterializationError('DOWNLOAD_FAILED', 'The media could not be downloaded');
+    }
+  }
+
+  private processError(error: unknown): MediaMaterializationError {
+    if (error instanceof MediaProcessError) {
+      if (error.kind === 'timeout') return new MediaMaterializationError('UPSTREAM_TIMEOUT', 'The media process timed out');
+      if (error.kind === 'malformed') return new MediaMaterializationError('UPSTREAM_INVALID_CONTENT', 'The media metadata is invalid');
+    }
+    return new MediaMaterializationError('DOWNLOAD_FAILED', 'The media could not be materialized');
+  }
+
+  private async muxVideoAudio(videoPath: string, audioPath: string, outputPath: string): Promise<void> {
+    const processOptions: MediaProcessOptions = {
+      executable: this.ffmpegExecutable,
+      timeoutMs: this.timeoutMs,
+      maxOutputBytes: 128 * 1024,
+    };
+    try {
+      await this.runFfmpeg(buildFfmpegRemuxArgs(videoPath, audioPath, outputPath), processOptions);
+    } catch (error) {
+      // VP9/AAC is normally safe to remux into MP4. If a provider/container
+      // combination rejects stream copy, transcode once to browser-compatible
+      // H.264/AAC rather than returning a silent or unplayable file.
+      if (!(error instanceof MediaProcessError) || error.kind !== 'failed') throw this.processError(error);
+      await rm(outputPath, { force: true }).catch(() => undefined);
+      try {
+        await this.runFfmpeg(buildFfmpegTranscodeArgs(videoPath, audioPath, outputPath), processOptions);
+      } catch (fallbackError) {
+        throw this.processError(fallbackError);
+      }
+    }
+  }
+
+  private async materializeWithAudio(resolutionId: string, item: InternalMediaItem, expiresAt: number): Promise<MaterializedMedia> {
+    await mkdir(this.rootDir, { recursive: true });
+    const stem = join(this.rootDir, `media-${resolutionId}-${item.id}-${Date.now()}`);
+    const videoPath = `${stem}.video`;
+    const audioPath = `${stem}.audio`;
+    const outputPart = `${stem}.mp4.part`;
+    const outputPath = `${stem}.mp4`;
+    this.temporaryPaths.add(outputPart);
+    this.temporaryPaths.add(outputPath);
+    try {
+      const video = await this.downloadToPath(item.providerUrl, videoPath, 'video');
+      const audio = await this.downloadToPath(item.audioProviderUrl!, audioPath, 'audio');
+      if (video.bytes + audio.bytes > this.maxTotalBytes) {
+        throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The temporary media cache is full');
+      }
+      await this.muxVideoAudio(videoPath, audioPath, outputPart);
+      let streams: ProbedMediaStreams;
+      try {
+        streams = await this.probeMedia(outputPart, {
+          executable: this.ffprobeExecutable,
+          timeoutMs: this.timeoutMs,
+          maxOutputBytes: 128 * 1024,
+        });
+      } catch (error) {
+        throw this.processError(error);
+      }
+      if (!streams.hasVideo || !streams.hasAudio) {
+        throw new MediaMaterializationError('UPSTREAM_INVALID_CONTENT', 'The muxed media has no video and audio streams');
+      }
+      const outputBytes = await stat(outputPart).then((result) => result.size);
+      if (outputBytes === 0 || outputBytes > this.maxFileBytes || this.totalBytes + outputBytes > this.maxTotalBytes) {
+        throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The materialized media exceeds the size limit');
+      }
+      await rename(outputPart, outputPath);
+      this.temporaryPaths.delete(outputPart);
+      await rm(videoPath, { force: true });
+      await rm(audioPath, { force: true });
+      this.temporaryPaths.delete(videoPath);
+      this.temporaryPaths.delete(audioPath);
       const cached: CachedMedia = {
         resolutionId,
         mediaId: item.id,
         path: outputPath,
-        contentType: contentTypeFor(kind),
+        contentType: 'video/mp4',
+        extension: 'mp4',
+        byteLength: outputBytes,
+        filename: `instafetch-${item.id.slice(0, 12)}.mp4`,
+        expiresAt: Math.min(expiresAt, this.now() + this.ttlMs),
+      };
+      this.cache.set(item.id, cached);
+      this.totalBytes += cached.byteLength;
+      this.temporaryPaths.delete(outputPath);
+      return cached;
+    } catch (error) {
+      for (const path of [videoPath, audioPath, outputPart, outputPath]) {
+        this.temporaryPaths.delete(path);
+        await rm(path, { force: true }).catch(() => undefined);
+      }
+      throw error instanceof MediaMaterializationError
+        ? error
+        : new MediaMaterializationError('DOWNLOAD_FAILED', 'The media could not be materialized');
+    }
+  }
+
+  private async materializeSingle(resolutionId: string, item: InternalMediaItem, expiresAt: number): Promise<MaterializedMedia> {
+    await mkdir(this.rootDir, { recursive: true });
+    const stem = join(this.rootDir, `media-${resolutionId}-${item.id}-${Date.now()}`);
+    const tempPath = `${stem}.part`;
+    const outputPath = stem;
+    try {
+      const downloaded = await this.downloadToPath(item.providerUrl, tempPath, item.type === 'video' ? 'video' : 'image');
+      if (!downloaded.kind || this.totalBytes + downloaded.bytes > this.maxTotalBytes) {
+        throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The temporary media cache is full');
+      }
+      if (item.type === 'video' && item.audioCodec) {
+        let streams: ProbedMediaStreams;
+        try {
+          streams = await this.probeMedia(tempPath, {
+            executable: this.ffprobeExecutable,
+            timeoutMs: this.timeoutMs,
+            maxOutputBytes: 128 * 1024,
+          });
+        } catch (error) {
+          throw this.processError(error);
+        }
+        if (!streams.hasVideo || !streams.hasAudio) {
+          throw new MediaMaterializationError('UPSTREAM_INVALID_CONTENT', 'The provider media has no video and audio streams');
+        }
+      }
+      await rename(tempPath, outputPath);
+      this.temporaryPaths.delete(tempPath);
+      const extension = downloaded.kind === 'video' ? 'mp4' : downloaded.kind === 'jpeg' ? 'jpg' : downloaded.kind;
+      const cached: CachedMedia = {
+        resolutionId,
+        mediaId: item.id,
+        path: outputPath,
+        contentType: contentTypeFor(downloaded.kind),
         extension,
-        byteLength: capture.bytes,
+        byteLength: downloaded.bytes,
         filename: `instafetch-${item.id.slice(0, 12)}.${extension}`,
         expiresAt: Math.min(expiresAt, this.now() + this.ttlMs),
       };
@@ -328,6 +487,17 @@ export class MediaMaterializer {
         ? error
         : new MediaMaterializationError('DOWNLOAD_FAILED', 'The media could not be materialized');
     }
+  }
+
+  private async materializeFresh(resolutionId: string, item: InternalMediaItem, expiresAt: number): Promise<MaterializedMedia> {
+    const existingForResolution = [...this.cache.values()].filter((entry) => entry.resolutionId === resolutionId).length;
+    if (existingForResolution >= this.maxFilesPerResolution) {
+      throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'This resolution has reached its file limit');
+    }
+    if (item.type === 'video' && item.audioProviderUrl) {
+      return this.materializeWithAudio(resolutionId, item, expiresAt);
+    }
+    return this.materializeSingle(resolutionId, item, expiresAt);
   }
 
   async materialize(resolutionId: string, item: InternalMediaItem, expiresAt: number): Promise<MaterializedMedia> {
