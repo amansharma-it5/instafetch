@@ -23,3 +23,7 @@ export function normalizeSiteUrl(value: string | undefined): string {
     return DEFAULT_SITE_URL;
   }
 }
+
+const buildSiteUrl = typeof import.meta.env === 'object' ? import.meta.env.VITE_SITE_URL : undefined;
+
+export const SITE_URL = normalizeSiteUrl(buildSiteUrl);

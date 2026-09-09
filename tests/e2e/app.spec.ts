@@ -42,7 +42,7 @@ const reelResponse = {
 
 test('homepage renders the downloader and navigation', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle('InstaFetch · Public Instagram media downloader');
+  await expect(page).toHaveTitle('Instagram Reel Downloader – InstaFetch');
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/favicon.svg');
   const favicon = await page.request.get('/favicon.svg');
   expect(favicon.status()).toBe(200);
@@ -61,6 +61,18 @@ test('homepage renders the downloader and navigation', async ({ page }) => {
   await expect(page.getByText('Verified Reel downloads are our clearest path. Other public media may work when Instagram exposes a genuine file anonymously.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Why do Reels work when some photos do not?' })).toBeVisible();
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /publicly accessible Instagram Reels/);
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://instafetch.pages.dev/');
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', 'Instagram Reel Downloader – InstaFetch');
+  await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary');
+  const jsonLd = await page.locator('script[type="application/ld+json"]').textContent();
+  expect(() => JSON.parse(jsonLd ?? '')).not.toThrow();
+  expect(jsonLd).toContain('WebApplication');
+  const duplicateIds = await page.evaluate(() => {
+    const counts = new Map<string, number>();
+    document.querySelectorAll<HTMLElement>('[id]').forEach((element) => counts.set(element.id, (counts.get(element.id) ?? 0) + 1));
+    return [...counts.entries()].filter(([, count]) => count > 1).map(([id]) => id);
+  });
+  expect(duplicateIds).toEqual([]);
 });
 
 test('rejects an invalid URL before calling the API', async ({ page }) => {
@@ -278,4 +290,43 @@ test('has no horizontal overflow at supported widths', async ({ page }) => {
     await expect(page.locator('#supported-reels .support-status')).toHaveText('Verified');
     await expect(page.locator('#supported-photo .support-status')).not.toHaveText('Verified');
   }
+});
+
+test('switches and persists the supported interface languages', async ({ page }) => {
+  await page.goto('/');
+  const picker = page.locator('.language-picker select');
+  await expect(picker).toHaveValue('en');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await picker.selectOption('es');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+  await expect(page.getByRole('heading', { name: /Descargador de Instagram/i })).toBeVisible();
+  await expect(page.locator('#supported-reels .support-status')).toHaveText('Verificado');
+  await expect(page.locator('#supported-photo .support-status')).not.toHaveText('Verificado');
+  await page.reload();
+  await expect(page.locator('.language-picker select')).toHaveValue('es');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+  await picker.selectOption('fr');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+  await expect(page.locator('#supported-reels .support-status')).toHaveText('Vérifié');
+});
+
+test('serves crawlable robots and sitemap files without temporary routes', async ({ page }) => {
+  const robots = await page.request.get('/robots.txt');
+  expect(robots.status()).toBe(200);
+  const robotsText = await robots.text();
+  expect(robotsText).toContain('Disallow: /api/');
+  expect(robotsText).toContain('Sitemap: https://instafetch.pages.dev/sitemap.xml');
+  const sitemap = await page.request.get('/sitemap.xml');
+  expect(sitemap.status()).toBe(200);
+  const sitemapText = await sitemap.text();
+  expect(sitemapText).toContain('/privacy');
+  expect(sitemapText).toContain('/contact');
+  expect(sitemapText).not.toContain('/api/');
+});
+
+test('updates unique metadata on direct legal routes', async ({ page }) => {
+  await page.goto('/privacy');
+  await expect(page).toHaveTitle('Privacy · InstaFetch');
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /temporary media/);
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://instafetch.pages.dev/privacy');
 });
