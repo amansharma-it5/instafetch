@@ -165,7 +165,7 @@ test('shows a cold-start message and can retry a failed request', async ({ page 
   await page.route('**/api/instagram/resolve', async (route) => {
     attempts += 1;
     if (attempts === 1) {
-      await new Promise((resolve) => setTimeout(resolve, 5_200));
+      await new Promise((resolve) => setTimeout(resolve, 6_000));
       await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ success: false, error: { code: 'PROVIDER_UNAVAILABLE', message: 'internal detail' } }) });
       return;
     }
@@ -175,7 +175,7 @@ test('shows a cold-start message and can retry a failed request', async ({ page 
   await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/reel/COLDSTART123/');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(page.getByText('Server is waking up. This can take up to a minute on the free hosting plan.')).toBeVisible({ timeout: 8_000 });
-  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible({ timeout: 12_000 });
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByRole('heading', { name: 'Your media is ready' })).toBeVisible();
 });
