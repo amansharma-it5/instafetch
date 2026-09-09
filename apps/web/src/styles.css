@@ -175,6 +175,7 @@ a { color: inherit; text-decoration: none; }
 .site-footer__top { display: flex; justify-content: space-between; gap: 40px; padding: 55px 0 46px; }
 .brand--footer { color: white; }
 .site-footer__top > div:first-child > p { margin: 14px 0 0; color: #929bb6; font-size: .79rem; }
+.site-footer__top > div:first-child > p.footer-credit { margin-top: 8px; color: #c3bbed; font-size: .71rem; font-weight: 600; letter-spacing: .01em; }
 .footer-links { display: flex; gap: clamp(50px, 8vw, 110px); }
 .footer-links > div { display: grid; align-content: start; gap: 12px; min-width: 90px; }
 .footer-links strong { color: #e5e8f3; font-size: .75rem; }

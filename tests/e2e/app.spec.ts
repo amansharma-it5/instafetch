@@ -51,9 +51,14 @@ test('homepage renders the downloader and navigation', async ({ page }) => {
   await expect(page.getByPlaceholder('Paste Instagram link here')).toBeVisible();
   await expect(page.getByRole('link', { name: 'InstaFetch home' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'FAQ' }).first()).toBeVisible();
+  await expect(page.getByText('Crafted with love ❤️ by Aman Sharma', { exact: true })).toBeVisible();
   await expect(page.getByText('Verified', { exact: true })).toBeVisible();
   await expect(page.getByText('Supported when publicly accessible', { exact: true })).toBeVisible();
   await expect(page.getByText('Limited / depends on Instagram access', { exact: true })).toBeVisible();
+  await expect(page.locator('#supported-photo .support-status')).toHaveText('Limited / depends on Instagram access');
+  await expect(page.locator('#supported-carousel .support-status')).toHaveText('Limited / compatibility varies');
+  await expect(page.locator('#supported-story .support-status')).toHaveText('Limited / compatibility varies');
+  await expect(page.getByText('Verified Reel downloads are our clearest path. Other public media may work when Instagram exposes a genuine file anonymously.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Why do Reels work when some photos do not?' })).toBeVisible();
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /publicly accessible Instagram Reels/);
 });
@@ -189,6 +194,7 @@ test('renders the static legal and support pages', async ({ page }) => {
     await page.goto(path);
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     await expect(page.getByText(/not affiliated with|public|private|Instagram/i).first()).toBeVisible();
+    await expect(page.getByText('Crafted with love ❤️ by Aman Sharma', { exact: true })).toBeVisible();
   }
 });
 
@@ -263,10 +269,13 @@ test('mobile menu and FAQ work with keyboard input', async ({ page }) => {
 });
 
 test('has no horizontal overflow at supported widths', async ({ page }) => {
-  for (const width of [375, 430, 768, 1024, 1280, 1440, 1920]) {
+  for (const width of [320, 375, 390, 430, 768, 1024, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(overflow, `horizontal overflow at ${width}px`).toBe(false);
+    await expect(page.getByText('Crafted with love ❤️ by Aman Sharma', { exact: true })).toBeVisible();
+    await expect(page.locator('#supported-reels .support-status')).toHaveText('Verified');
+    await expect(page.locator('#supported-photo .support-status')).not.toHaveText('Verified');
   }
 });
