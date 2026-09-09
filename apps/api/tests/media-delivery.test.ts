@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
 import type { InstagramExtractionProvider } from '../src/services/extraction/InstagramExtractionProvider';
-import { MediaMaterializer } from '../src/services/media/media-materializer';
+import { MediaMaterializationError, MediaMaterializer } from '../src/services/media/media-materializer';
 import { ResolutionStore } from '../src/services/store/resolution-store';
 import { DownloadTokenService } from '../src/services/tokens/download-tokens';
 
@@ -31,14 +31,14 @@ function photoProvider(): InstagramExtractionProvider {
   };
 }
 
-function testApp() {
+function testApp(options: { previewRateLimit?: number; downloadRateLimit?: number } = {}) {
   const store = new ResolutionStore();
   const materializer = new MediaMaterializer({
     requestUpstream: async () => ({ statusCode: 200, headers: { 'content-type': 'video/mp4' }, body: Readable.from(videoBytes) }),
     allowedHosts: (host) => host === 'cdn.test',
   });
   const tokenService = new DownloadTokenService(secret);
-  return { app: createApp({ provider: provider(), store, materializer, tokenService }), store, materializer, tokenService };
+  return { app: createApp({ provider: provider(), store, materializer, tokenService, ...options }), store, materializer, tokenService };
 }
 
 describe('media delivery endpoints', () => {
@@ -99,6 +99,33 @@ describe('media delivery endpoints', () => {
 
     await services.materializer.dispose();
     services.store.dispose();
+  });
+
+  it('applies independent preview and download rate limits', async () => {
+    const services = testApp({ previewRateLimit: 1, downloadRateLimit: 1 });
+    const resolved = await request(services.app).post('/api/instagram/resolve').send({ url: reelUrl });
+    const item = resolved.body.data.items[0] as { downloadUrl: string; previewUrl: string };
+    expect((await request(services.app).get(item.previewUrl)).status).toBe(200);
+    expect((await request(services.app).get(item.previewUrl)).status).toBe(429);
+    expect((await request(services.app).get(item.downloadUrl)).status).toBe(200);
+    expect((await request(services.app).get(item.downloadUrl)).status).toBe(429);
+    await services.materializer.dispose();
+    services.store.dispose();
+  });
+
+  it('normalizes exhausted materialization capacity to SERVER_BUSY', async () => {
+    const store = new ResolutionStore();
+    const tokenService = new DownloadTokenService(secret);
+    const busyMaterializer = {
+      materialize: async () => { throw new MediaMaterializationError('SERVER_BUSY', 'internal capacity detail'); },
+    } as unknown as MediaMaterializer;
+    const app = createApp({ provider: provider(), store, tokenService, materializer: busyMaterializer });
+    const resolved = await request(app).post('/api/instagram/resolve').send({ url: reelUrl });
+    const download = await request(app).get(resolved.body.data.items[0].downloadUrl);
+    expect(download.status).toBe(503);
+    expect(download.body).toEqual({ success: false, error: { code: 'SERVER_BUSY', message: 'The media service is busy. Try again shortly.' } });
+    expect(JSON.stringify(download.body)).not.toContain('internal capacity detail');
+    store.dispose();
   });
 
   it('keeps upstream and filesystem details out of delivery errors', async () => {

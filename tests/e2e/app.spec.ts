@@ -200,6 +200,7 @@ test('maps anonymous availability errors to capability-aware copy', async ({ pag
       expected: 'This post is not available for anonymous download. Instagram may require login for this content.',
     },
     { code: 'PRIVATE_OR_UNAVAILABLE', status: 404, expected: 'This post is private or unavailable. Only public content can be downloaded.' },
+    { code: 'SERVER_BUSY', status: 503, expected: 'Server is busy right now. Please try again shortly.' },
     { code: 'EXTRACTION_FAILED', status: 502, expected: /We could not resolve that media\./ },
   ];
   let index = 0;
@@ -217,6 +218,34 @@ test('maps anonymous availability errors to capability-aware copy', async ({ pag
     await page.getByRole('button', { name: 'Download', exact: true }).click();
     await expect(page.getByText(current.expected)).toBeVisible();
   }
+});
+
+test('prevents duplicate download requests and offers a retry after a recoverable failure', async ({ page }) => {
+  await page.route('**/api/instagram/resolve', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(reelResponse) });
+  });
+  let attempts = 0;
+  await page.route('**/api/download**', async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ success: false, error: { code: 'SERVER_BUSY', message: 'internal detail' } }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'video/mp4', body: Buffer.concat([Buffer.from('0000ftypisom'), Buffer.alloc(32)]) });
+  });
+  await page.goto('/');
+  await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/reel/DOWNLOAD123/');
+  await page.getByRole('button', { name: 'Download', exact: true }).click();
+  const link = page.locator('.download-link');
+  await link.click();
+  await expect(page.getByRole('link', { name: 'Preparing…' })).toBeVisible();
+  await link.evaluate((element) => (element as HTMLElement).click());
+  expect(attempts).toBe(1);
+  await expect(page.getByRole('link', { name: 'Retry download' })).toBeVisible();
+  await link.click();
+  await expect(page.getByRole('link', { name: 'Downloaded' })).toBeVisible();
+  expect(attempts).toBe(2);
 });
 
 test('mobile menu and FAQ work with keyboard input', async ({ page }) => {

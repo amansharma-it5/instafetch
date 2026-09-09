@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
 import {
   ArrowDownToLine,
@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { parseInstagramUrl } from '@instafetch/shared';
 import { ApiClientError, mediaUrl, resolveInstagram, type ResolveData, type ResolveMediaItem } from './api';
+import { analytics, categoryForSourceType } from './analytics';
 
 const navigation = [
   { label: 'Video', href: '/#supported-video' },
@@ -41,6 +42,7 @@ const errorMessages: Record<string, string> = {
   PRIVATE_OR_UNAVAILABLE: 'This post is private or unavailable. Only public content can be downloaded.',
   LOGIN_REQUIRED: 'This post is not available for anonymous download. Instagram may require login for this content.',
   RATE_LIMITED: 'The service is busy right now. Wait a moment, then try again.',
+  SERVER_BUSY: 'Server is busy right now. Please try again shortly.',
   EXTRACTION_TIMEOUT: 'The public media check timed out. Please try again.',
   EXTRACTION_FAILED: 'We could not resolve that media. Availability depends on what Instagram exposes publicly without login.',
   PROVIDER_UNAVAILABLE: 'The media service is waking up or temporarily unavailable. Please try again shortly.',
@@ -57,6 +59,7 @@ const errorMessages: Record<string, string> = {
 };
 
 const SLOW_REQUEST_DELAY_MS = 1_500;
+const DOWNLOAD_TIMEOUT_MS = 45_000;
 
 type DownloaderState =
   | { status: 'empty' | 'ready' }
@@ -89,9 +92,13 @@ function useDownloader() {
     event?.preventDefault();
     if (state.status === 'processing') return;
     let canonicalUrl: string;
+    let sourceCategory: ReturnType<typeof categoryForSourceType> = 'unknown';
     try {
-      canonicalUrl = parseInstagramUrl(value.trim()).canonicalUrl;
+      const validated = parseInstagramUrl(value.trim());
+      canonicalUrl = validated.canonicalUrl;
+      sourceCategory = categoryForSourceType(validated.route);
     } catch {
+      analytics.track('resolve_failure', 'unknown');
       setState({ status: 'error', code: 'INVALID_INSTAGRAM_URL', message: userMessage('INVALID_INSTAGRAM_URL') });
       return;
     }
@@ -101,21 +108,26 @@ function useDownloader() {
     controller.current = nextController;
     setValue(canonicalUrl);
     setState({ status: 'processing', slow: false });
+    analytics.track('resolve_started', sourceCategory);
     slowTimer.current = window.setTimeout(() => {
       setState((current) => current.status === 'processing' ? { ...current, slow: true } : current);
     }, SLOW_REQUEST_DELAY_MS);
     try {
       const response = await resolveInstagram(canonicalUrl, nextController.signal);
       if (response.data.items.length === 0) {
+        analytics.track('resolve_failure', sourceCategory);
         setState({ status: 'error', code: 'PROVIDER_MALFORMED_RESPONSE', message: userMessage('PROVIDER_MALFORMED_RESPONSE') });
       } else {
+        analytics.track('resolve_success', categoryForSourceType(response.data.sourceType));
         setState({ status: 'success', data: response.data });
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       if (error instanceof ApiClientError) {
+        analytics.track('resolve_failure', sourceCategory);
         setState({ status: 'error', code: error.code, message: userMessage(error.code, error.message) });
       } else {
+        analytics.track('resolve_failure', sourceCategory);
         setState({ status: 'error', code: 'NETWORK_FAILURE', message: userMessage('NETWORK_FAILURE') });
       }
     } finally {
@@ -215,25 +227,64 @@ function MediaPreview({ item }: { item: ResolveMediaItem }) {
   return <div className="preview-shell">{!loaded && <div aria-live="polite" className="preview-loading"><LoaderCircle aria-hidden="true" className="spin" size={20} /><span>Loading preview…</span></div>}{item.type === 'video' ? <video aria-label="Video preview" controls onError={() => setFailed(true)} onLoadedMetadata={() => setLoaded(true)} preload="metadata" src={mediaUrl(item.previewUrl)} /> : <img alt="Instagram photo preview" onError={() => setFailed(true)} onLoad={() => setLoaded(true)} src={mediaUrl(item.previewUrl)} />}</div>;
 }
 
-function DownloadLink({ item }: { item: ResolveMediaItem }) {
-  const [starting, setStarting] = useState(false);
+function DownloadLink({ item, category }: { item: ResolveMediaItem; category: ReturnType<typeof categoryForSourceType> }) {
+  const [state, setState] = useState<'idle' | 'preparing' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
+  const resetTimer = useRef<number | null>(null);
   useEffect(() => {
-    if (!starting) return undefined;
-    const timer = window.setTimeout(() => setStarting(false), 1_500);
-    return () => window.clearTimeout(timer);
-  }, [starting]);
-  return <a aria-busy={starting} aria-disabled={starting} className="download-link" download href={mediaUrl(item.downloadUrl)} onClick={(event) => { if (starting) { event.preventDefault(); return; } setStarting(true); }}>{starting ? <LoaderCircle aria-hidden="true" className="spin" size={17} /> : <Download aria-hidden="true" size={17} />}{starting ? 'Preparing…' : `Download ${item.type === 'video' ? 'video' : 'photo'}`}</a>;
+    return () => { if (resetTimer.current !== null) window.clearTimeout(resetTimer.current); };
+  }, []);
+  const download = async (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    if (state === 'preparing') return;
+    setState('preparing');
+    setErrorMessage('');
+    analytics.track('download_started', category);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+    try {
+      const response = await fetch(mediaUrl(item.downloadUrl), { signal: controller.signal });
+      if (!response.ok) {
+        let code = 'DOWNLOAD_FAILED';
+        try { const payload = await response.json() as { error?: { code?: string } }; code = payload.error?.code ?? code; } catch { /* keep safe fallback */ }
+        throw new ApiClientError(code, userMessage(code), response.status);
+      }
+      const blob = await response.blob();
+      if (blob.size === 0) throw new ApiClientError('DOWNLOAD_FAILED', userMessage('DOWNLOAD_FAILED'));
+      const objectUrl = URL.createObjectURL(blob);
+      const trigger = document.createElement('a');
+      trigger.href = objectUrl;
+      trigger.download = `instafetch-${item.id.slice(0, 12)}.${item.extension}`;
+      trigger.rel = 'noreferrer';
+      document.body.appendChild(trigger);
+      trigger.click();
+      trigger.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+      analytics.track('download_success', category);
+      setState('success');
+      resetTimer.current = window.setTimeout(() => setState('idle'), 2_500);
+    } catch (error) {
+      analytics.track('download_failure', category);
+      const code = error instanceof ApiClientError ? error.code : 'DOWNLOAD_FAILED';
+      setErrorMessage(userMessage(code));
+      setState('error');
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
+  const label = state === 'preparing' ? 'Preparing…' : state === 'success' ? 'Downloaded' : state === 'error' ? 'Retry download' : `Download ${item.type === 'video' ? 'video' : 'photo'}`;
+  return <><a aria-busy={state === 'preparing'} aria-disabled={state === 'preparing'} aria-label={label} className="download-link" download href={mediaUrl(item.downloadUrl)} onClick={download}>{state === 'preparing' ? <LoaderCircle aria-hidden="true" className="spin" size={17} /> : state === 'success' ? <Check aria-hidden="true" size={17} /> : state === 'error' ? <CircleAlert aria-hidden="true" size={17} /> : <Download aria-hidden="true" size={17} />}{label}</a>{errorMessage && <p aria-live="polite" className="download-feedback">{errorMessage}</p>}</>;
 }
 
-function MediaCard({ item, index, total }: { item: ResolveMediaItem; index: number; total: number }) {
-  return <article className="media-card"><div className="media-card__preview"><MediaPreview item={item} /></div><div className="media-card__body"><div className="media-card__topline"><span className={`media-badge ${item.type === 'video' ? 'media-badge--video' : 'media-badge--photo'}`}>{item.type === 'video' ? <Film aria-hidden="true" size={14} /> : <FileImage aria-hidden="true" size={14} />}{item.type === 'video' ? 'Video' : 'Photo'}</span>{total > 1 && <span className="item-number">Item {index + 1} of {total}</span>}</div><div className="media-card__meta"><strong>{item.qualityLabel !== 'unknown' ? item.qualityLabel : 'Original quality'}</strong><span>{item.extension.toUpperCase()}{item.width && item.height ? ` · ${item.width}×${item.height}` : ''}</span></div><DownloadLink item={item} /></div></article>;
+function MediaCard({ item, index, total, category }: { item: ResolveMediaItem; index: number; total: number; category: ReturnType<typeof categoryForSourceType> }) {
+  return <article className="media-card"><div className="media-card__preview"><MediaPreview item={item} /></div><div className="media-card__body"><div className="media-card__topline"><span className={`media-badge ${item.type === 'video' ? 'media-badge--video' : 'media-badge--photo'}`}>{item.type === 'video' ? <Film aria-hidden="true" size={14} /> : <FileImage aria-hidden="true" size={14} />}{item.type === 'video' ? 'Video' : 'Photo'}</span>{total > 1 && <span className="item-number">Item {index + 1} of {total}</span>}</div><div className="media-card__meta"><strong>{item.qualityLabel !== 'unknown' ? item.qualityLabel : 'Original quality'}</strong><span>{item.extension.toUpperCase()}{item.width && item.height ? ` · ${item.width}×${item.height}` : ''}</span></div><DownloadLink item={item} category={category} /></div></article>;
 }
 
 function Results({ data }: { data: ResolveData }) {
   const itemCount = data.itemCount ?? data.items.length;
   const resolvedItemCount = data.resolvedItemCount ?? data.items.length;
   const isPartial = data.partial === true || resolvedItemCount < itemCount;
-  return <section aria-labelledby="results-heading" aria-live="polite" className="results-section" id="results"><div className="results-heading-row"><div><p className="eyebrow eyebrow--purple">Ready to download</p><h2 id="results-heading">{data.isCarousel ? (isPartial ? `${resolvedItemCount} of ${itemCount} items available` : `${itemCount} items found`) : 'Your media is ready'}</h2><p className="results-subtitle">{data.author ? `Shared by ${data.author}` : 'Public Instagram media'}{data.title ? ` · ${data.title}` : ''}</p></div><span className="result-type"><Check aria-hidden="true" size={15} />{data.sourceType}</span></div>{isPartial && <div aria-live="polite" className="partial-warning" role="status"><CircleAlert aria-hidden="true" size={18} /><span>{data.warning ?? 'Some carousel items were unavailable.'}</span></div>}<div className={`media-grid ${data.items.length > 1 ? 'media-grid--carousel' : ''}`}>{data.items.map((item, index) => <MediaCard index={index} item={item} key={item.id} total={resolvedItemCount} />)}</div></section>;
+  return <section aria-labelledby="results-heading" aria-live="polite" className="results-section" id="results"><div className="results-heading-row"><div><p className="eyebrow eyebrow--purple">Ready to download</p><h2 id="results-heading">{data.isCarousel ? (isPartial ? `${resolvedItemCount} of ${itemCount} items available` : `${itemCount} items found`) : 'Your media is ready'}</h2><p className="results-subtitle">{data.author ? `Shared by ${data.author}` : 'Public Instagram media'}{data.title ? ` · ${data.title}` : ''}</p></div><span className="result-type"><Check aria-hidden="true" size={15} />{data.sourceType}</span></div>{isPartial && <div aria-live="polite" className="partial-warning" role="status"><CircleAlert aria-hidden="true" size={18} /><span>{data.warning ?? 'Some carousel items were unavailable.'}</span></div>}<div className={`media-grid ${data.items.length > 1 ? 'media-grid--carousel' : ''}`}>{data.items.map((item, index) => <MediaCard category={categoryForSourceType(data.sourceType)} index={index} item={item} key={item.id} total={resolvedItemCount} />)}</div></section>;
 }
 
 const benefits = [
@@ -265,7 +316,8 @@ const faqs = [
 
 function HomePage() {
   const downloader = useDownloader();
-  return <><main><section className="hero-section"><div className="hero-orb hero-orb--one" aria-hidden="true" /><div className="hero-orb hero-orb--two" aria-hidden="true" /><div className="hero-content"><div className="hero-copy"><span className="hero-kicker"><span className="pulse-dot" aria-hidden="true" />Public media, made simple</span><h1>Instagram<br /><em>Downloader</em></h1><p>Turn a public Instagram link into a clear preview and a genuine download when the media is available anonymously.</p><div className="hero-points"><span><Check aria-hidden="true" size={15} />No login</span><span><Check aria-hidden="true" size={15} />Best available quality</span><span><Check aria-hidden="true" size={15} />Carousel items when available</span></div></div><div className="hero-tool-wrap"><DownloaderPanel downloader={downloader} /><StatusMessage onRetry={downloader.retry} state={downloader.state} /></div></div></section>{downloader.state.status === 'success' && <Results data={downloader.state.data} />}<section aria-label="InstaFetch principles" className="trust-strip"><div><ShieldCheck aria-hidden="true" size={19} /><span><strong>Public by design</strong><small>No private-account access</small></span></div><div><Zap aria-hidden="true" size={19} /><span><strong>Real media only</strong><small>No placeholder links</small></span></div><div><Globe2 aria-hidden="true" size={19} /><span><strong>Ready anywhere</strong><small>Availability can vary</small></span></div></section><section className="content-section how-section" id="how-it-works"><div className="section-intro"><p className="eyebrow">How it works</p><h2>From link to saved media, without the clutter.</h2><p>Three small steps keep the experience clear and let you stay in control of what gets downloaded.</p></div><div className="steps-grid">{[['01', 'Copy the link', 'Copy the URL of a public Instagram post, Reel, photo, or carousel.'], ['02', 'Paste it here', 'Drop the link into InstaFetch and let the public media provider check anonymous availability.'], ['03', 'Preview and download', 'Check each available result, then save the genuine media you need.']].map(([number, title, text]) => <div className="step-card" key={number}><span className="step-number">{number}</span><div><h3>{title}</h3><p>{text}</p></div><ArrowRight aria-hidden="true" className="step-arrow" size={19} /></div>)}</div></section><section className="benefits-section"><div className="content-section"><div className="section-intro section-intro--light"><p className="eyebrow eyebrow--light">A better save flow</p><h2>Useful by default.</h2><p>InstaFetch keeps the important details visible and the path to a download short.</p></div><div className="benefit-grid">{benefits.map(({ icon: Icon, title, text }) => <div className="benefit-card" key={title}><span className="benefit-icon"><Icon aria-hidden="true" size={20} /></span><h3>{title}</h3><p>{text}</p></div>)}</div></div></section><section className="content-section supported-section" id="supported"><div className="section-intro"><p className="eyebrow">Supported content</p><h2>Bring the link. We’ll show what’s really there.</h2><p>Each supported format gets its own clear result state and download action.</p></div><div className="supported-grid">{supported.map(({ id, icon: Icon, title, text, status }) => <article className="supported-card" id={id} key={id}><div className="supported-card__head"><span className="supported-icon"><Icon aria-hidden="true" size={21} /></span><span className={`support-status ${status === 'Verified' ? 'support-status--verified' : 'support-status--conditional'}`}>{status}</span></div><h3>{title}</h3><p>{text}</p><a href="#how-it-works">Learn how it works <ArrowRight aria-hidden="true" size={15} /></a></article>)}</div></section><section className="faq-section" id="faq"><div className="content-section faq-layout"><div className="section-intro"><p className="eyebrow">Questions, answered</p><h2>Good to know before you download.</h2><p>Clear expectations help public-media tools stay useful and responsible.</p></div><FaqList /></div></section><section className="closing-section"><div><span className="hero-kicker hero-kicker--dark"><Sparkles aria-hidden="true" size={15} />Ready when you are</span><h2>Have a public link?</h2><p>Bring it back to the top and start a fresh preview.</p></div><a className="primary-button" href="#top">Start downloading <ArrowRight aria-hidden="true" size={18} /></a></section></main><Footer /></>;
+  useEffect(() => { analytics.track('page_view', 'unknown'); }, []);
+  return <><main><section className="hero-section"><div className="hero-orb hero-orb--one" aria-hidden="true" /><div className="hero-orb hero-orb--two" aria-hidden="true" /><div className="hero-content"><div className="hero-copy"><span className="hero-kicker"><span className="pulse-dot" aria-hidden="true" />Verified Reel downloads</span><h1>Instagram<br /><em>Downloader</em></h1><p>Start with a public Reel for our verified path, or try another public link when Instagram exposes a genuine file anonymously.</p><div className="hero-points"><span><Check aria-hidden="true" size={15} />No login</span><span><Check aria-hidden="true" size={15} />Best available quality</span><span><Check aria-hidden="true" size={15} />Other media when available</span></div></div><div className="hero-tool-wrap"><DownloaderPanel downloader={downloader} /><StatusMessage onRetry={downloader.retry} state={downloader.state} /></div></div></section>{downloader.state.status === 'success' && <Results data={downloader.state.data} />}<section aria-label="InstaFetch principles" className="trust-strip"><div><ShieldCheck aria-hidden="true" size={19} /><span><strong>Public by design</strong><small>No private-account access</small></span></div><div><Zap aria-hidden="true" size={19} /><span><strong>Real media only</strong><small>No placeholder links</small></span></div><div><Globe2 aria-hidden="true" size={19} /><span><strong>Ready anywhere</strong><small>Availability can vary</small></span></div></section><section className="content-section how-section" id="how-it-works"><div className="section-intro"><p className="eyebrow">How it works</p><h2>From link to saved media, without the clutter.</h2><p>Three small steps keep the experience clear and let you stay in control of what gets downloaded.</p></div><div className="steps-grid">{[['01', 'Copy the link', 'Copy the URL of a public Instagram post, Reel, photo, or carousel.'], ['02', 'Paste it here', 'Drop the link into InstaFetch and let the public media provider check anonymous availability.'], ['03', 'Preview and download', 'Check each available result, then save the genuine media you need.']].map(([number, title, text]) => <div className="step-card" key={number}><span className="step-number">{number}</span><div><h3>{title}</h3><p>{text}</p></div><ArrowRight aria-hidden="true" className="step-arrow" size={19} /></div>)}</div></section><section className="benefits-section"><div className="content-section"><div className="section-intro section-intro--light"><p className="eyebrow eyebrow--light">A better save flow</p><h2>Useful by default.</h2><p>InstaFetch keeps the important details visible and the path to a download short.</p></div><div className="benefit-grid">{benefits.map(({ icon: Icon, title, text }) => <div className="benefit-card" key={title}><span className="benefit-icon"><Icon aria-hidden="true" size={20} /></span><h3>{title}</h3><p>{text}</p></div>)}</div></div></section><section className="content-section supported-section" id="supported"><div className="section-intro"><p className="eyebrow">Supported content</p><h2>Bring the link. We’ll show what’s really there.</h2><p>Each supported format gets its own clear result state and download action.</p></div><div className="supported-grid">{supported.map(({ id, icon: Icon, title, text, status }) => <article className="supported-card" id={id} key={id}><div className="supported-card__head"><span className="supported-icon"><Icon aria-hidden="true" size={21} /></span><span className={`support-status ${status === 'Verified' ? 'support-status--verified' : 'support-status--conditional'}`}>{status}</span></div><h3>{title}</h3><p>{text}</p><a href="#how-it-works">Learn how it works <ArrowRight aria-hidden="true" size={15} /></a></article>)}</div></section><section className="faq-section" id="faq"><div className="content-section faq-layout"><div className="section-intro"><p className="eyebrow">Questions, answered</p><h2>Good to know before you download.</h2><p>Clear expectations help public-media tools stay useful and responsible.</p></div><FaqList /></div></section><section className="closing-section"><div><span className="hero-kicker hero-kicker--dark"><Sparkles aria-hidden="true" size={15} />Ready when you are</span><h2>Have a public link?</h2><p>Bring it back to the top and start a fresh preview.</p></div><a className="primary-button" href="#top">Start downloading <ArrowRight aria-hidden="true" size={18} /></a></section></main><Footer /></>;
 }
 
 function FaqList() {

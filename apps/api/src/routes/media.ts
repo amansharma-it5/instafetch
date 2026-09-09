@@ -13,6 +13,8 @@ export interface MediaRouteDependencies {
   store: ResolutionStore;
   materializer: MediaMaterializer;
   tokenService?: DownloadTokenService;
+  previewRateLimiter?: import('express').RequestHandler;
+  downloadRateLimiter?: import('express').RequestHandler;
 }
 
 function messageForCode(code: ApiError['code']): string {
@@ -25,6 +27,7 @@ function messageForCode(code: ApiError['code']): string {
     case 'UPSTREAM_TIMEOUT': return 'The media provider timed out';
     case 'UPSTREAM_INVALID_CONTENT': return 'The provider returned invalid media';
     case 'DOWNLOAD_FAILED': return 'The media could not be downloaded';
+    case 'SERVER_BUSY': return 'The media service is busy. Try again shortly.';
     default: return 'The request could not be processed';
   }
 }
@@ -36,7 +39,8 @@ function mediaError(error: unknown): ApiError {
   if (error instanceof MediaMaterializationError) {
     const status = error.code === 'MEDIA_TOO_LARGE' ? 413
       : error.code === 'MEDIA_UNAVAILABLE' ? 404
-        : error.code === 'UPSTREAM_TIMEOUT' ? 504 : 502;
+        : error.code === 'UPSTREAM_TIMEOUT' ? 504
+          : error.code === 'SERVER_BUSY' ? 503 : 502;
     return new ApiError(error.code, messageForCode(error.code), status);
   }
   return new ApiError('DOWNLOAD_FAILED', messageForCode('DOWNLOAD_FAILED'), 502);
@@ -99,7 +103,7 @@ async function streamMedia(request: Request, response: Response, media: Material
   stream.pipe(response);
 }
 
-export function createMediaRouter({ store, materializer, tokenService }: MediaRouteDependencies): Router {
+export function createMediaRouter({ store, materializer, tokenService, previewRateLimiter, downloadRateLimiter }: MediaRouteDependencies): Router {
   const router = Router();
 
   const handle = (purpose: DownloadTokenPurpose, attachment: boolean) => async (request: Request, response: Response, next: NextFunction) => {
@@ -115,7 +119,7 @@ export function createMediaRouter({ store, materializer, tokenService }: MediaRo
     }
   };
 
-  router.get('/download', handle('download', true));
-  router.get('/preview', handle('preview', false));
+  router.get('/download', downloadRateLimiter ?? ((_request, _response, next) => next()), handle('download', true));
+  router.get('/preview', previewRateLimiter ?? ((_request, _response, next) => next()), handle('preview', false));
   return router;
 }

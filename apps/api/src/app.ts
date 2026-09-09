@@ -68,6 +68,9 @@ export interface AppOptions {
   tokenService?: DownloadTokenService;
   globalRateLimit?: number;
   resolveRateLimit?: number;
+  previewRateLimit?: number;
+  downloadRateLimit?: number;
+  /** Backwards-compatible override for both media routes. */
   mediaRateLimit?: number;
 }
 
@@ -156,17 +159,22 @@ export function createApp(options: AppOptions = {}) {
     createInstagramRouter({ provider, store, tokenService }),
   );
 
-  app.use(
-    '/api',
-    rateLimit({
-      windowMs: 60_000,
-      limit: options.mediaRateLimit ?? 30,
-      standardHeaders: 'draft-8',
-      legacyHeaders: false,
-      handler: rateLimitHandler,
-    }),
-    createMediaRouter({ store, materializer, tokenService }),
-  );
+  const mediaLimit = options.mediaRateLimit;
+  const previewRateLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: options.previewRateLimit ?? mediaLimit ?? 60,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    handler: rateLimitHandler,
+  });
+  const downloadRateLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: options.downloadRateLimit ?? mediaLimit ?? 20,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    handler: rateLimitHandler,
+  });
+  app.use('/api', createMediaRouter({ store, materializer, tokenService, previewRateLimiter, downloadRateLimiter }));
 
   app.use((error: unknown, request: express.Request, response: express.Response, _next: express.NextFunction) => {
     const apiError = error instanceof ApiError

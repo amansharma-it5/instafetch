@@ -72,6 +72,32 @@ describe('MediaMaterializer', () => {
     await materializer.dispose();
   });
 
+  it('fails fast when the bounded media concurrency capacity is full', async () => {
+    let markStarted!: () => void;
+    let unblock!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const blocked = new Promise<void>((resolve) => { unblock = resolve; });
+    const materializer = new MediaMaterializer({
+      rootDir: root(),
+      maxConcurrent: 1,
+      requestUpstream: async () => {
+        markStarted();
+        await blocked;
+        return { statusCode: 200, headers: { 'content-type': 'video/mp4' }, body: Readable.from(videoBytes) };
+      },
+      allowedHosts: () => true,
+    });
+    const first = materializer.materialize('resolution-1', item('https://cdn.test/one'), Date.now() + 60_000);
+    await started;
+    expect(materializer.activeOperationCount()).toBe(1);
+    await expect(materializer.materialize('resolution-2', item('https://cdn.test/two'), Date.now() + 60_000))
+      .rejects.toMatchObject({ code: 'SERVER_BUSY' });
+    unblock();
+    await first;
+    expect(materializer.activeOperationCount()).toBe(0);
+    await materializer.dispose();
+  });
+
   it('rejects private or non-HTTPS redirects before fetching them', async () => {
     const requestUpstream: RequestUpstream = async () => ({
       statusCode: 302,

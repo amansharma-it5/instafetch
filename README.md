@@ -69,6 +69,7 @@ Frontend variable:
 
 - `VITE_API_BASE_URL`: the API origin used at build time, such as the Render service URL.
 - `VITE_SITE_URL`: the bare frontend origin used for canonical and social metadata. It defaults to `https://instafetch.pages.dev`; set it to the custom domain before a custom-domain build.
+- `VITE_ANALYTICS_ENABLED`: optional privacy-safe event sink switch. It defaults to `false`; no analytics events leave the browser unless explicitly enabled by a future sink integration.
 
 `WEB_ORIGIN` uses a comma-separated list of exact browser origins, for example `https://instafetch.pages.dev,https://instafetch.example`. Do not include paths, credentials, wildcards, or trailing route fragments. When a custom frontend domain is added, add that exact origin to `WEB_ORIGIN` and set the same origin in `VITE_SITE_URL` for the next Pages build.
 
@@ -100,6 +101,18 @@ Create a Pages project from the same repository and `main` branch with these set
 Cloudflare Pages should use the repository's `package-lock.json` and npm workspaces. Set both frontend variables before each production build so the browser calls the Render API and generated canonical/social metadata uses the intended site origin; no API credentials belong in frontend variables. For a future custom domain, add the domain to Pages, update `VITE_SITE_URL`, add the exact origin to the backend `WEB_ORIGIN`, and redeploy the affected service(s).
 
 There is no Wrangler configuration or Workers deployment script in this repository. If a separate `Workers Builds` check appears beside the Pages check, review the Cloudflare account or GitHub integration settings rather than adding Worker configuration here.
+
+## Runtime limits
+
+The API keeps expensive public-media work bounded for the free hosting footprint:
+
+- yt-dlp/gallery-dl extraction, upstream fetches, FFmpeg, and ffprobe each have a 30-second process/request timeout. The browser resolve request has a 120-second client timeout.
+- A single source or materialized output is limited to 100 MB. The in-memory temporary media cache is limited to 500 MB and 50 files per resolution.
+- Resolution records, media files, and HMAC preview/download tokens expire after 5 minutes. Resolution storage is capped at 100 jobs and 100 items per job. Upstream redirects are limited to three hops.
+- At most two independent media materialization operations (including FFmpeg work) run at once. There is no queue; additional requests receive `SERVER_BUSY` and can be retried shortly.
+- Expired cache entries are cleaned at most every 60 seconds and all temporary files are removed when the API shuts down. Render's filesystem is ephemeral by design; no permanent user files are expected.
+
+Default request limits are 60 requests/minute globally, 10 resolve requests/minute, 60 preview requests/minute, and 20 download requests/minute per client. These limits protect the provider and the small instance; they are not a guarantee of Instagram availability.
 
 ## Security and availability
 

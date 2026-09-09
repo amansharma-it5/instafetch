@@ -26,7 +26,8 @@ export type MaterializationFailureCode =
   | 'MEDIA_TOO_LARGE'
   | 'UPSTREAM_TIMEOUT'
   | 'UPSTREAM_INVALID_CONTENT'
-  | 'DOWNLOAD_FAILED';
+  | 'DOWNLOAD_FAILED'
+  | 'SERVER_BUSY';
 
 export class MediaMaterializationError extends Error {
   constructor(public readonly code: MaterializationFailureCode, message: string) {
@@ -59,6 +60,8 @@ export interface MediaMaterializerOptions {
   maxFileBytes?: number;
   maxTotalBytes?: number;
   maxFilesPerResolution?: number;
+  /** Maximum number of independent materialization/FFmpeg operations in flight. */
+  maxConcurrent?: number;
   maxRedirects?: number;
   now?: () => number;
   requestUpstream?: RequestUpstream;
@@ -79,6 +82,7 @@ const DEFAULT_MAX_TOTAL_BYTES = 500 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_TTL_MS = 5 * 60_000;
 const DEFAULT_MAX_REDIRECTS = 3;
+const DEFAULT_MAX_CONCURRENT = 2;
 
 function isPrivateAddress(address: string): boolean {
   const normalized = address.toLowerCase().replace(/^\[|\]$/g, '').split('%')[0];
@@ -237,6 +241,7 @@ export class MediaMaterializer {
   private readonly maxFileBytes: number;
   private readonly maxTotalBytes: number;
   private readonly maxFilesPerResolution: number;
+  private readonly maxConcurrent: number;
   private readonly maxRedirects: number;
   private readonly now: () => number;
   private readonly requestUpstream: RequestUpstream;
@@ -250,6 +255,7 @@ export class MediaMaterializer {
   private readonly temporaryPaths = new Set<string>();
   private readonly cleanupTimer: NodeJS.Timeout;
   private totalBytes = 0;
+  private activeOperations = 0;
 
   constructor(options: MediaMaterializerOptions = {}) {
     this.rootDir = resolvePath(options.rootDir ?? join(tmpdir(), 'instafetch-media'));
@@ -258,6 +264,10 @@ export class MediaMaterializer {
     this.maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
     this.maxTotalBytes = options.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES;
     this.maxFilesPerResolution = options.maxFilesPerResolution ?? 50;
+    this.maxConcurrent = options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
+    if (!Number.isInteger(this.maxConcurrent) || this.maxConcurrent < 1) {
+      throw new Error('maxConcurrent must be a positive integer');
+    }
     this.maxRedirects = options.maxRedirects ?? DEFAULT_MAX_REDIRECTS;
     this.now = options.now ?? Date.now;
     this.requestUpstream = options.requestUpstream ?? defaultRequestUpstream;
@@ -508,7 +518,24 @@ export class MediaMaterializer {
     }
     const pending = this.locks.get(item.id);
     if (pending) return pending;
-    const promise = this.materializeFresh(resolutionId, item, expiresAt);
+    if (this.activeOperations >= this.maxConcurrent) {
+      throw new MediaMaterializationError('SERVER_BUSY', 'The media service is at capacity');
+    }
+    this.activeOperations += 1;
+    let released = false;
+    const release = () => {
+      if (!released) {
+        released = true;
+        this.activeOperations -= 1;
+      }
+    };
+    const promise = (async () => {
+      try {
+        return await this.materializeFresh(resolutionId, item, expiresAt);
+      } finally {
+        release();
+      }
+    })();
     this.locks.set(item.id, promise);
     try { return await promise; } finally { this.locks.delete(item.id); }
   }
@@ -529,6 +556,8 @@ export class MediaMaterializer {
 
   cachedCount(): number { return this.cache.size; }
   cachedBytes(): number { return this.totalBytes; }
+  activeOperationCount(): number { return this.activeOperations; }
+  concurrencyLimit(): number { return this.maxConcurrent; }
 
   private async removeCached(mediaId: string): Promise<void> {
     const cached = this.cache.get(mediaId);
