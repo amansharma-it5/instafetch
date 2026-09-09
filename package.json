@@ -12,6 +12,7 @@
     "test": "vitest run --config vitest.config.ts",
     "build": "npm --workspace @instafetch/shared run build && npm --workspace @instafetch/api run build && npm --workspace @instafetch/web run build",
     "instagram:feasibility": "tsx scripts/instagram-feasibility.ts",
+    "smoke:production": "tsx scripts/production-smoke.ts",
     "e2e": "playwright test --config=tests/e2e/playwright.config.ts",
     "dev:web": "npm --workspace @instafetch/web run dev",
     "dev:api": "npm --workspace @instafetch/api run dev"

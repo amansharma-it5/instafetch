@@ -2,6 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
+import { randomUUID } from 'node:crypto';
 import pino from 'pino';
 import { createInstagramRouter } from './routes/instagram.js';
 import { createMediaRouter } from './routes/media.js';
@@ -13,8 +14,15 @@ import { ResolutionStore } from './services/store/resolution-store.js';
 import { DownloadTokenService, isSecureDownloadTokenSecret } from './services/tokens/download-tokens.js';
 
 const logger = pino({
-  redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'],
+  redact: ['req.headers.authorization', 'req.headers.cookie', '*.url', '*.token', '*.providerUrl', '*.audioProviderUrl'],
 });
+
+const requestIdPattern = /^[A-Za-z0-9._-]{1,64}$/;
+
+function requestId(request: express.Request): string {
+  const candidate = request.header('x-request-id');
+  return candidate && requestIdPattern.test(candidate) ? candidate : randomUUID();
+}
 
 function allowedOrigins(): Set<string> {
   const isProduction = process.env.NODE_ENV === 'production';
@@ -77,6 +85,18 @@ export function createApp(options: AppOptions = {}) {
   };
 
   app.disable('x-powered-by');
+  app.use((request, response, next) => {
+    const id = requestId(request);
+    const startedAt = process.hrtime.bigint();
+    response.setHeader('X-Request-Id', id);
+    response.once('finish', () => {
+      const latencyMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+      if (process.env.NODE_ENV === 'production') {
+        logger.info({ requestId: id, route: request.path, status: response.statusCode, latencyMs: Math.round(latencyMs * 100) / 100 }, 'request complete');
+      }
+    });
+    next();
+  });
   // Render terminates TLS at one known proxy hop. Trusting exactly one hop keeps
   // forwarded HTTPS and client IP headers useful without trusting arbitrary proxies.
   app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
@@ -144,13 +164,13 @@ export function createApp(options: AppOptions = {}) {
     createMediaRouter({ store, materializer, tokenService }),
   );
 
-  app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
+  app.use((error: unknown, request: express.Request, response: express.Response, _next: express.NextFunction) => {
     const apiError = error instanceof ApiError
       ? error
       : error instanceof SyntaxError
         ? new ApiError('INVALID_INSTAGRAM_URL', 'Enter a valid JSON request body', 400)
       : new ApiError('INTERNAL_ERROR', 'The request could not be processed', 500);
-    logger.warn({ code: apiError.code }, 'request rejected');
+    logger.warn({ requestId: response.getHeader('X-Request-Id'), route: request.path, status: apiError.statusCode, code: apiError.code }, 'request rejected');
     response.status(apiError.statusCode).json({
       success: false,
       error: {

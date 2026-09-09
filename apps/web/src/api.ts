@@ -39,6 +39,7 @@ export interface ResolveFailure {
 export type ResolveResponse = ResolveSuccess | ResolveFailure;
 
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001').replace(/\/$/, '');
+const RESOLVE_TIMEOUT_MS = 120_000;
 
 export class ApiClientError extends Error {
   constructor(public readonly code: string, message: string, public readonly status?: number) {
@@ -53,16 +54,30 @@ export function mediaUrl(path: string): string {
 
 export async function resolveInstagram(url: string, signal?: AbortSignal): Promise<ResolveSuccess> {
   let response: Response;
+  const requestController = new AbortController();
+  let timedOut = false;
+  const timeout = window.setTimeout(() => {
+    timedOut = true;
+    requestController.abort();
+  }, RESOLVE_TIMEOUT_MS);
+  const abortRequest = () => requestController.abort();
+  signal?.addEventListener('abort', abortRequest, { once: true });
   try {
     response = await fetch(`${API_BASE_URL}/api/instagram/resolve`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ url }),
-      signal,
+      signal: requestController.signal,
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    if (signal?.aborted) throw error;
+    if (timedOut) {
+      throw new ApiClientError('NETWORK_FAILURE', 'The service took too long to respond. Please try again.');
+    }
     throw new ApiClientError('NETWORK_FAILURE', 'We could not reach the InstaFetch service. Try again shortly.');
+  } finally {
+    window.clearTimeout(timeout);
+    signal?.removeEventListener('abort', abortRequest);
   }
 
   let payload: ResolveResponse;

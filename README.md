@@ -26,6 +26,18 @@ npm run build
 npm run e2e
 ```
 
+Check the deployed frontend and API health endpoints without touching Instagram:
+
+```text
+npm run smoke:production
+```
+
+For an explicitly supplied public Reel, the same script also validates and resolves that Reel without credentials, cookies, or browser profiles. It prints only status and safe metadata:
+
+```text
+npm run smoke:production -- "https://www.instagram.com/reel/<id>/"
+```
+
 Run the development applications separately:
 
 ```text
@@ -35,7 +47,7 @@ npm run dev:web
 
 Copy `.env.example` to `.env` for local settings. Never put credentials, cookies, or production secrets in the repository.
 
-The API listens on `0.0.0.0` and port `3001` locally. The web client uses `VITE_API_BASE_URL` and defaults to `http://localhost:3001`.
+The API listens on `0.0.0.0` and port `3001` locally. The web client uses `VITE_API_BASE_URL` and defaults to `http://localhost:3001`. It also includes concise `/privacy`, `/terms`, `/disclaimer`, and `/contact` information pages.
 
 ## Environment variables
 

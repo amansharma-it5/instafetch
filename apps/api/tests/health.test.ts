@@ -10,6 +10,21 @@ describe('health endpoints', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: 'live' });
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
+  });
+
+  it('returns a bounded request id without trusting unsafe input', async () => {
+    const response = await request(createApp({ provider }))
+      .get('/health/live')
+      .set('X-Request-Id', 'phase6-check');
+
+    expect(response.headers['x-request-id']).toBe('phase6-check');
+
+    const unsafe = await request(createApp({ provider }))
+      .get('/health/live')
+      .set('X-Request-Id', 'https://provider.example/token');
+    expect(unsafe.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('reports readiness', async () => {

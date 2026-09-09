@@ -42,7 +42,7 @@ const reelResponse = {
 
 test('homepage renders the downloader and navigation', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle('InstaFetch');
+  await expect(page).toHaveTitle('InstaFetch · Public Instagram media downloader');
   await expect(page.getByRole('heading', { name: /Instagram Downloader/i })).toBeVisible();
   await expect(page.getByPlaceholder('Paste Instagram link here')).toBeVisible();
   await expect(page.getByRole('link', { name: 'InstaFetch home' })).toBeVisible();
@@ -51,6 +51,7 @@ test('homepage renders the downloader and navigation', async ({ page }) => {
   await expect(page.getByText('Supported when publicly accessible', { exact: true })).toBeVisible();
   await expect(page.getByText('Limited / depends on Instagram access', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Why do Reels work when some photos do not?' })).toBeVisible();
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /publicly accessible Instagram Reels/);
 });
 
 test('rejects an invalid URL before calling the API', async ({ page }) => {
@@ -151,12 +152,40 @@ test('maps provider errors and network failures to friendly status text', async 
   await page.goto('/');
   await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/reel/RATE123/');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
-  await expect(page.getByText('The service is busy right now. Please wait a moment and try again.')).toBeVisible();
+  await expect(page.getByText('The service is busy right now. Wait a moment, then try again.')).toBeVisible();
   await expect(page.getByText('internal detail')).not.toBeVisible();
 
   await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/reel/NETWORK123/');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(page.getByText('We could not reach InstaFetch. Check your connection and try again.')).toBeVisible();
+});
+
+test('shows a cold-start message and can retry a failed request', async ({ page }) => {
+  let attempts = 0;
+  await page.route('**/api/instagram/resolve', async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5_200));
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ success: false, error: { code: 'PROVIDER_UNAVAILABLE', message: 'internal detail' } }) });
+      return;
+    }
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(reelResponse) });
+  });
+  await page.goto('/');
+  await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/reel/COLDSTART123/');
+  await page.getByRole('button', { name: 'Download', exact: true }).click();
+  await expect(page.getByText('Server is waking up. This can take up to a minute on the free hosting plan.')).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('heading', { name: 'Your media is ready' })).toBeVisible();
+});
+
+test('renders the static legal and support pages', async ({ page }) => {
+  for (const [path, heading] of [['/privacy', 'Privacy at InstaFetch'], ['/terms', 'Terms of use'], ['/disclaimer', 'Disclaimer'], ['/contact', 'Contact InstaFetch']] as const) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+    await expect(page.getByText(/not affiliated with|public|private|Instagram/i).first()).toBeVisible();
+  }
 });
 
 test('maps anonymous availability errors to capability-aware copy', async ({ page }) => {
@@ -166,8 +195,8 @@ test('maps anonymous availability errors to capability-aware copy', async ({ pag
       status: 401,
       expected: 'This post is not available for anonymous download. Instagram may require login for this content.',
     },
-    { code: 'PRIVATE_OR_UNAVAILABLE', status: 404, expected: 'This post is private or is no longer available.' },
-    { code: 'EXTRACTION_FAILED', status: 502, expected: /We could not resolve media from that link\./ },
+    { code: 'PRIVATE_OR_UNAVAILABLE', status: 404, expected: 'This post is private or unavailable. Only public content can be downloaded.' },
+    { code: 'EXTRACTION_FAILED', status: 502, expected: /We could not resolve that media\./ },
   ];
   let index = 0;
   await page.route('**/api/instagram/resolve', async (route) => {
