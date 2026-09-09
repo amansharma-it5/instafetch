@@ -56,7 +56,7 @@ const errorMessages: Record<string, string> = {
   DOWNLOAD_FAILED: 'The download could not be prepared. Resolve the link again and retry.',
 };
 
-const SLOW_REQUEST_DELAY_MS = 5_000;
+const SLOW_REQUEST_DELAY_MS = 1_500;
 
 type DownloaderState =
   | { status: 'empty' | 'ready' }
