@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /preview
-Disallow: /download
-
-Sitemap: https://instafetch.pages.dev/sitemap.xml

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">InstaFetch public Instagram Reel downloader</title>
+  <desc id="desc">A simple download arrow inside a violet gradient card with the InstaFetch wordmark.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f4f1ff" />
+      <stop offset="1" stop-color="#e7edff" />
+    </linearGradient>
+    <linearGradient id="accent" x1="88" y1="90" x2="1100" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6d6af6" />
+      <stop offset="1" stop-color="#332f9d" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" rx="40" fill="url(#background)" />
+  <circle cx="1000" cy="96" r="170" fill="#fff" opacity=".5" />
+  <circle cx="110" cy="570" r="210" fill="#fff" opacity=".45" />
+  <rect x="88" y="90" width="1010" height="450" rx="34" fill="url(#accent)" />
+  <rect x="144" y="152" width="170" height="170" rx="44" fill="#fff" opacity=".16" />
+  <path d="M229 184v82m0 0 30-30m-30 30-30-30M181 292h96" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" />
+  <text x="366" y="245" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="68" font-weight="700">InstaFetch</text>
+  <text x="366" y="318" fill="#e9e8ff" font-family="Arial, Helvetica, sans-serif" font-size="30">Public Instagram Reel downloads</text>
+  <text x="144" y="443" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="25" opacity=".9">Preview first. Download when a genuine public file is available.</text>
+</svg>

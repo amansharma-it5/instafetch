@@ -63,6 +63,10 @@ test('homepage renders the downloader and navigation', async ({ page }) => {
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /publicly accessible Instagram Reels/);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://instafetch.pages.dev/');
   await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', 'Instagram Reel Downloader – InstaFetch');
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://instafetch.pages.dev/social-preview.png');
+  await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute('content', 'https://instafetch.pages.dev/social-preview.png');
+  await expect(page.locator('meta[name="twitter:image:alt"]')).toHaveAttribute('content', 'InstaFetch public Instagram Reel downloader');
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/site.webmanifest');
   await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary');
   const jsonLd = await page.locator('script[type="application/ld+json"]').textContent();
   expect(() => JSON.parse(jsonLd ?? '')).not.toThrow();
@@ -316,12 +320,14 @@ test('serves crawlable robots and sitemap files without temporary routes', async
   const robotsText = await robots.text();
   expect(robotsText).toContain('Disallow: /api/');
   expect(robotsText).toContain('Sitemap: https://instafetch.pages.dev/sitemap.xml');
+  expect(robotsText).not.toContain('__INSTAFETCH_SITE_URL__');
   const sitemap = await page.request.get('/sitemap.xml');
   expect(sitemap.status()).toBe(200);
   const sitemapText = await sitemap.text();
   expect(sitemapText).toContain('/privacy');
   expect(sitemapText).toContain('/contact');
   expect(sitemapText).not.toContain('/api/');
+  expect(sitemapText).not.toContain('__INSTAFETCH_SITE_URL__');
 });
 
 test('updates unique metadata on direct legal routes', async ({ page }) => {

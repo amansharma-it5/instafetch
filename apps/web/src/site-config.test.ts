@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SITE_URL, normalizeSiteUrl } from './site-config';
+import { DEFAULT_SITE_URL, normalizeSiteUrl, siteAssetUrl } from './site-config';
 
 describe('site URL configuration', () => {
   it('uses a bare configured origin for SEO metadata', () => {
@@ -10,5 +10,14 @@ describe('site URL configuration', () => {
     expect(normalizeSiteUrl(undefined)).toBe(DEFAULT_SITE_URL);
     expect(normalizeSiteUrl('https://instafetch.example/path')).toBe(DEFAULT_SITE_URL);
     expect(normalizeSiteUrl('javascript:alert(1)')).toBe(DEFAULT_SITE_URL);
+  });
+
+  it('builds asset URLs from the configured site origin', () => {
+    expect(siteAssetUrl('/social-preview.svg', 'https://instafetch.example')).toBe(
+      'https://instafetch.example/social-preview.svg',
+    );
+    expect(siteAssetUrl('site.webmanifest', 'https://instafetch.example')).toBe(
+      'https://instafetch.example/site.webmanifest',
+    );
   });
 });
