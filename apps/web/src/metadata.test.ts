@@ -5,7 +5,7 @@ import { siteAssetUrl } from "./site-config";
 describe("page metadata", () => {
   it("keeps the home page truthful and Reel-first", () => {
     const metadata = metadataForPath("/");
-    expect(metadata.title).toBe("Instagram Reel & YouTube Downloader – InstaFetch");
+    expect(metadata.title).toBe("Instagram Reel Downloader · YouTube Beta – InstaFetch");
     expect(metadata.description).toContain(
       "publicly accessible Instagram Reels",
     );

@@ -60,6 +60,15 @@ const navigation = [
 ];
 const SLOW_REQUEST_DELAY_MS = 1_500;
 const DOWNLOAD_TIMEOUT_MS = 45_000;
+const RETRYABLE_RESOLVE_ERRORS = new Set([
+  "NETWORK_FAILURE",
+  "PROVIDER_UNAVAILABLE",
+  "EXTRACTION_TIMEOUT",
+  "EXTRACTION_FAILED",
+  "RATE_LIMITED",
+  "SERVER_BUSY",
+  "UPSTREAM_TIMEOUT",
+]);
 type DownloaderState =
   | { status: "empty" | "ready" }
   | { status: "processing"; slow: boolean }
@@ -70,6 +79,30 @@ function userMessage(code: string, t: (key: string) => string): string {
   return t(`error.${code}`) === `error.${code}`
     ? t("error.fallback")
     : t(`error.${code}`);
+}
+
+function normalizeSubmittedUrl(value: string): string {
+  return value.trim().split(/\r?\n/, 1)[0]?.trim() ?? "";
+}
+
+function looksLikeYouTubeUrl(value: string): boolean {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase().replace(/\.$/, "");
+    return ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"].includes(hostname);
+  } catch {
+    return false;
+  }
+}
+
+function resolveMessage(
+  code: string,
+  category: ReturnType<typeof categoryForSourceType>,
+  t: (key: string) => string,
+): string {
+  if (category === "youtube" && code === "LOGIN_REQUIRED") {
+    return userMessage("YOUTUBE_LOGIN_REQUIRED", t);
+  }
+  return userMessage(code, t);
 }
 
 function useDownloader() {
@@ -93,17 +126,18 @@ function useDownloader() {
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
     if (state.status === "processing") return;
+    const submittedUrl = normalizeSubmittedUrl(value);
     let canonicalUrl: string;
     let resolveRequest: typeof resolveInstagram = resolveInstagram;
     let sourceCategory: ReturnType<typeof categoryForSourceType> = "unknown";
     try {
-      const validated = parseInstagramUrl(value.trim());
+      const validated = parseInstagramUrl(submittedUrl);
       canonicalUrl = validated.canonicalUrl;
       resolveRequest = resolveInstagram;
       sourceCategory = categoryForSourceType(validated.route);
     } catch {
       try {
-        const validated = parseYouTubeUrl(value.trim());
+        const validated = parseYouTubeUrl(submittedUrl);
         canonicalUrl = validated.canonicalUrl;
         resolveRequest = resolveYouTube;
         sourceCategory = "youtube";
@@ -111,7 +145,9 @@ function useDownloader() {
         analytics.track("resolve_failed", "unknown");
         const code = error instanceof YouTubeUrlError && error.code === "PLAYLIST_NOT_SUPPORTED"
           ? error.code
-          : "INVALID_INSTAGRAM_URL";
+          : looksLikeYouTubeUrl(submittedUrl)
+            ? "INVALID_YOUTUBE_URL"
+            : "INVALID_INSTAGRAM_URL";
         setState({ status: "error", code, message: userMessage(code, t) });
         return;
       }
@@ -151,7 +187,7 @@ function useDownloader() {
       const code =
         error instanceof ApiClientError ? error.code : "NETWORK_FAILURE";
       analytics.track("resolve_failed", sourceCategory);
-      setState({ status: "error", code, message: userMessage(code, t) });
+      setState({ status: "error", code, message: resolveMessage(code, sourceCategory, t) });
     } finally {
       if (slowTimer.current !== null) window.clearTimeout(slowTimer.current);
       slowTimer.current = null;
@@ -233,19 +269,19 @@ function Header() {
           </button>
         </div>
       </div>
-      {open && (
-        <nav
-          aria-label={t("mobileNavigation")}
-          className="mobile-nav"
-          id="mobile-navigation"
-        >
-          {navigation.map((item) => (
-            <a href={item.href} key={item.href} onClick={close}>
-              {t(item.key)}
-            </a>
-          ))}
-        </nav>
-      )}
+      <nav
+        aria-hidden={!open}
+        aria-label={t("mobileNavigation")}
+        className="mobile-nav"
+        hidden={!open}
+        id="mobile-navigation"
+      >
+        {navigation.map((item) => (
+          <a href={item.href} key={item.href} onClick={close}>
+            {t(item.key)}
+          </a>
+        ))}
+      </nav>
     </header>
   );
 }
@@ -287,7 +323,11 @@ function DownloaderPanel({
             aria-describedby="url-help"
             aria-invalid={state.status === "error"}
             autoComplete="url"
+            autoCapitalize="none"
+            autoCorrect="off"
             id="instagram-url"
+            inputMode="url"
+            maxLength={2048}
             onChange={(event) => {
               onChange(event.target.value);
               setPasteMessage("");
@@ -363,7 +403,7 @@ function StatusMessage({
   const { t } = useI18n();
   if (state.status === "processing")
     return (
-      <div aria-live="polite" className="status-card status-card--processing">
+      <div aria-live="polite" className="status-card status-card--processing" role="status">
         <LoaderCircle aria-hidden="true" className="spin" size={20} />
         <div>
           <span>
@@ -375,14 +415,16 @@ function StatusMessage({
     );
   if (state.status === "error")
     return (
-      <div aria-live="assertive" className="status-card status-card--error">
+      <div aria-live="assertive" className="status-card status-card--error" role="alert">
         <CircleAlert aria-hidden="true" size={20} />
         <div>
           <strong>{t("status.errorHeading")}</strong>
           <span>{state.message}</span>
-          <button className="status-retry" onClick={onRetry} type="button">
-            {t("status.tryAgain")}
-          </button>
+          {RETRYABLE_RESOLVE_ERRORS.has(state.code) && (
+            <button className="status-retry" onClick={onRetry} type="button">
+              {t("status.tryAgain")}
+            </button>
+          )}
         </div>
       </div>
     );
@@ -436,9 +478,12 @@ function MediaPreview({
         <img
           alt={t("media.photo")}
           decoding="async"
+          height={item.height ?? undefined}
+          loading="lazy"
           onError={() => setFailed(true)}
           onLoad={markLoaded}
           src={mediaUrl(item.previewUrl)}
+          width={item.width ?? undefined}
         />
       )}
     </div>
@@ -746,12 +791,16 @@ const faqs = Array.from({ length: 9 }, (_, index) => [
 function HomePage() {
   const { t } = useI18n();
   const downloader = useDownloader();
+  const pageViewTracked = useRef(false);
   useEffect(() => {
+    if (pageViewTracked.current) return;
+    pageViewTracked.current = true;
     analytics.track("page_view", "unknown");
   }, []);
   return (
     <>
-      <main>
+      <a className="skip-link" href="#main-content">{t("skipToContent")}</a>
+      <main id="main-content">
         <section className="hero-section">
           <div className="hero-orb hero-orb--one" aria-hidden="true" />
           <div className="hero-orb hero-orb--two" aria-hidden="true" />

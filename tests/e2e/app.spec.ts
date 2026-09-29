@@ -42,7 +42,7 @@ const reelResponse = {
 
 test('homepage renders the downloader and navigation', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle('Instagram Reel & YouTube Downloader – InstaFetch');
+  await expect(page).toHaveTitle('Instagram Reel Downloader · YouTube Beta – InstaFetch');
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/favicon.svg');
   const favicon = await page.request.get('/favicon.svg');
   expect(favicon.status()).toBe(200);
@@ -58,14 +58,14 @@ test('homepage renders the downloader and navigation', async ({ page }) => {
   await expect(page.locator('#supported-photo .support-status')).toHaveText('Limited / depends on Instagram access');
   await expect(page.locator('#supported-carousel .support-status')).toHaveText('Limited / compatibility varies');
   await expect(page.locator('#supported-story .support-status')).toHaveText('Limited / compatibility varies');
-  await expect(page.getByText('Verified Instagram Reel downloads and public YouTube videos. Other media may work when a genuine file is exposed anonymously.')).toBeVisible();
+  await expect(page.getByText('Verified Instagram Reel downloads. YouTube is in beta, and other media may work when a genuine file is exposed anonymously.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Why do Reels work when some photos do not?' })).toBeVisible();
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /publicly accessible Instagram Reels/);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://instafetch.pages.dev/');
-  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', 'Instagram Reel & YouTube Downloader – InstaFetch');
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', 'Instagram Reel Downloader · YouTube Beta – InstaFetch');
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://instafetch.pages.dev/social-preview.png');
   await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute('content', 'https://instafetch.pages.dev/social-preview.png');
-  await expect(page.locator('meta[name="twitter:image:alt"]')).toHaveAttribute('content', 'InstaFetch public Instagram and YouTube downloader');
+  await expect(page.locator('meta[name="twitter:image:alt"]')).toHaveAttribute('content', 'InstaFetch public Reel downloader with beta YouTube support');
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/site.webmanifest');
   await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary');
   const jsonLd = await page.locator('script[type="application/ld+json"]').textContent();
@@ -87,6 +87,14 @@ test('rejects an invalid URL before calling the API', async ({ page }) => {
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(page.getByText('That link does not look like a supported public Instagram or YouTube URL.')).toBeVisible();
   expect(apiCalled).toBe(false);
+});
+
+test('maps malformed YouTube links to the YouTube-specific error', async ({ page }) => {
+  await page.goto('/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.youtube.com/watch?v=too-short');
+  await page.getByRole('button', { name: 'Download', exact: true }).click();
+  await expect(page.getByText('That link does not look like a supported public YouTube video or Shorts URL.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).not.toBeVisible();
 });
 
 test('shows processing and then a real Reel result card', async ({ page }) => {
@@ -121,6 +129,17 @@ test('submits a public YouTube video through the platform route', async ({ page 
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your media is ready' })).toBeVisible();
   await expect(page.getByText('Download video')).toBeVisible();
+});
+
+test('explains anonymous YouTube access failures without offering login workarounds', async ({ page }) => {
+  await page.route('**/api/youtube/resolve', async (route) => {
+    await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ success: false, error: { code: 'LOGIN_REQUIRED', message: 'internal detail' } }) });
+  });
+  await page.goto('/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  await page.getByRole('button', { name: 'Download', exact: true }).click();
+  await expect(page.getByText('YouTube did not allow anonymous access to this video from the current server. You can try another public video later.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).not.toBeVisible();
 });
 
 test('renders mixed carousel items independently', async ({ page }) => {

@@ -27,6 +27,7 @@ describe("locale messages", () => {
       "UNSUPPORTED_MEDIA",
       "PRIVATE_OR_UNAVAILABLE",
       "LOGIN_REQUIRED",
+      "YOUTUBE_LOGIN_REQUIRED",
       "RATE_LIMITED",
       "SERVER_BUSY",
       "EXTRACTION_TIMEOUT",

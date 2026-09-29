@@ -89,7 +89,7 @@ export function applyPageMetadata(path: string, locale: Locale) {
   ensureMeta(
     'meta[property="og:image:alt"]',
     { property: "og:image:alt" },
-    "InstaFetch public Instagram and YouTube downloader",
+    "InstaFetch public Reel downloader with beta YouTube support",
   );
   ensureMeta('meta[name="twitter:card"]', { name: "twitter:card" }, "summary");
   ensureMeta(
@@ -110,7 +110,7 @@ export function applyPageMetadata(path: string, locale: Locale) {
   ensureMeta(
     'meta[name="twitter:image:alt"]',
     { name: "twitter:image:alt" },
-    "InstaFetch public Instagram and YouTube downloader",
+    "InstaFetch public Reel downloader with beta YouTube support",
   );
   ensureLink('link[rel="canonical"]', "canonical", url);
 }
