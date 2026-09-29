@@ -22,6 +22,8 @@ export interface YtDlpProcessOptions {
   timeoutMs?: number;
   maxOutputBytes?: number;
   spawnImpl?: typeof spawn;
+  /** Fixed anonymous YouTube client fallback; never user-controlled. */
+  youtubePlayerClient?: 'android_vr';
 }
 
 export interface YtDlpMetadata {
@@ -130,17 +132,20 @@ export function isFfprobeAvailable(configuredPath = process.env.FFPROBE_PATH?.tr
   return isToolAvailable('ffprobe', configuredPath);
 }
 
-export function buildYtDlpArgs(canonicalUrl: string): string[] {
-  return [
+export function buildYtDlpArgs(canonicalUrl: string, options: Pick<YtDlpProcessOptions, 'youtubePlayerClient'> = {}): string[] {
+  const args = [
     '--ignore-config',
     '--dump-single-json',
     '--skip-download',
     '--no-warnings',
     '--no-cache-dir',
     '--no-call-home',
-    '--',
-    canonicalUrl,
   ];
+  if (options.youtubePlayerClient) {
+    args.push('--extractor-args', `youtube:player_client=${options.youtubePlayerClient}`);
+  }
+  args.push('--', canonicalUrl);
+  return args;
 }
 
 function spawnYtDlp(canonicalUrl: string, options: YtDlpProcessOptions): Promise<string> {
@@ -157,7 +162,7 @@ function spawnYtDlp(canonicalUrl: string, options: YtDlpProcessOptions): Promise
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
       };
-      child = spawnImpl(executable, buildYtDlpArgs(canonicalUrl), spawnOptions);
+      child = spawnImpl(executable, buildYtDlpArgs(canonicalUrl, options), spawnOptions);
     } catch (error) {
       rejectOutput(new YtDlpProcessError('unavailable', `yt-dlp could not be started: ${redactUrls(errorMessage(error))}`));
       return;
