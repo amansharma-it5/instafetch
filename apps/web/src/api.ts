@@ -77,7 +77,7 @@ async function resolveAt(path: string, url: string, signal?: AbortSignal): Promi
   } catch (error) {
     if (signal?.aborted) throw error;
     if (timedOut) {
-      throw new ApiClientError('NETWORK_FAILURE', 'The service took too long to respond. Please try again.');
+      throw new ApiClientError('EXTRACTION_TIMEOUT', 'The public media check timed out. Please try again.');
     }
     throw new ApiClientError('NETWORK_FAILURE', 'We could not reach the InstaFetch service. Try again shortly.');
   } finally {

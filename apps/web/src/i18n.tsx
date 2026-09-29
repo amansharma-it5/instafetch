@@ -18,6 +18,7 @@ const messages: Record<Locale, Record<string, string>> = {
     mobileNavigation: "Mobile navigation",
     "menu.open": "Open menu",
     "menu.close": "Close menu",
+    skipToContent: "Skip to content",
     "brand.home": "InstaFetch home",
     "nav.video": "Video",
     "nav.photo": "Photo",
@@ -25,11 +26,11 @@ const messages: Record<Locale, Record<string, string>> = {
     "nav.story": "Story",
     "nav.carousel": "Carousel",
     "nav.faq": "FAQ",
-    "hero.kicker": "Verified Reels + YouTube videos",
+    "hero.kicker": "Verified Reels · YouTube Beta",
     "hero.title": "Instagram & YouTube",
     "hero.titleAccent": "Downloader",
     "hero.description":
-      "Verified Instagram Reel downloads and public YouTube videos. Other media may work when a genuine file is exposed anonymously.",
+      "Verified Instagram Reel downloads. YouTube is in beta, and other media may work when a genuine file is exposed anonymously.",
     "hero.noLogin": "No login",
     "hero.bestQuality": "Best available quality",
     "hero.otherMedia": "Other media when available",
@@ -113,7 +114,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "supported.eyebrow": "Supported content",
     "supported.heading": "Bring the link. We’ll show what’s really there.",
     "supported.intro":
-      "Reels and public YouTube videos are our clearest paths. Other formats remain conditional on what each platform exposes anonymously.",
+      "Verified Reels are our clearest path. YouTube is in beta; other formats remain conditional on what each platform exposes anonymously.",
     "supported.video.status": "Supported when publicly accessible",
     "supported.video.title": "Instagram Video Downloader",
     "supported.video.text":
@@ -217,6 +218,8 @@ const messages: Record<Locale, Record<string, string>> = {
       "This media is private or unavailable. Only public content can be downloaded.",
     "error.LOGIN_REQUIRED":
       "This media is not available for anonymous download. The platform may require login for this content.",
+    "error.YOUTUBE_LOGIN_REQUIRED":
+      "YouTube did not allow anonymous access to this video from the current server. You can try another public video later.",
     "error.RATE_LIMITED":
       "The service is busy right now. Wait a moment, then try again.",
     "error.SERVER_BUSY": "Server is busy right now. Please try again shortly.",
@@ -247,9 +250,9 @@ const messages: Record<Locale, Record<string, string>> = {
     "error.DOWNLOAD_FAILED":
       "The download could not be prepared. Resolve the link again and retry.",
     "error.fallback": "Something went wrong. Please try again.",
-    "meta.home.title": "Instagram Reel & YouTube Downloader – InstaFetch",
+    "meta.home.title": "Instagram Reel Downloader · YouTube Beta – InstaFetch",
     "meta.home.description":
-      "Download publicly accessible Instagram Reels and public YouTube videos with preview and the best available quality. Other media remains conditional on anonymous availability.",
+      "Download publicly accessible Instagram Reels with preview and the best available quality. YouTube is in beta; other media remains conditional on anonymous availability.",
     "meta.privacy.title": "Privacy · InstaFetch",
     "meta.privacy.description":
       "Learn how InstaFetch handles public Instagram and YouTube links, temporary media, and privacy-safe requests.",
@@ -269,6 +272,7 @@ const messages: Record<Locale, Record<string, string>> = {
     mobileNavigation: "Navegación móvil",
     "menu.open": "Abrir menú",
     "menu.close": "Cerrar menú",
+    skipToContent: "Saltar al contenido",
     "brand.home": "Inicio de InstaFetch",
     "nav.video": "Vídeo",
     "nav.photo": "Foto",
@@ -276,11 +280,11 @@ const messages: Record<Locale, Record<string, string>> = {
     "nav.story": "Historia",
     "nav.carousel": "Carrusel",
     "nav.faq": "Preguntas frecuentes",
-    "hero.kicker": "Reels verificados + vídeos de YouTube",
+    "hero.kicker": "Reels verificados · YouTube en beta",
     "hero.title": "Descargador de",
     "hero.titleAccent": "Instagram",
     "hero.description":
-      "Los Reels de Instagram y los vídeos públicos de YouTube tienen el camino más claro. Otros contenidos dependen de que se exponga un archivo genuino sin iniciar sesión.",
+      "Descargas verificadas de Reels de Instagram. YouTube está en beta y otros medios pueden funcionar cuando se expone un archivo genuino sin iniciar sesión.",
     "hero.noLogin": "Sin inicio de sesión",
     "hero.bestQuality": "Mejor calidad disponible",
     "hero.otherMedia": "Otros medios cuando estén disponibles",
@@ -368,7 +372,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "supported.heading":
       "Trae el enlace. Mostraremos lo que realmente esté disponible.",
     "supported.intro":
-      "Los Reels y los vídeos públicos de YouTube son nuestros caminos más claros. Los demás formatos dependen de lo que cada plataforma exponga anónimamente.",
+      "Los Reels verificados son nuestro camino más claro. YouTube está en beta; los demás formatos dependen de lo que cada plataforma exponga anónimamente.",
     "supported.video.status": "Compatible cuando es público",
     "supported.video.title": "Descargador de vídeos de Instagram",
     "supported.video.text":
@@ -455,9 +459,9 @@ const messages: Record<Locale, Record<string, string>> = {
     "legal.contact.intro": "¿Tienes una pregunta o encontraste un problema?",
     "legal.englishNotice":
       "El texto legal detallado se muestra en inglés para mantener su precisión.",
-    "meta.home.title": "Descargador de Reels y YouTube – InstaFetch",
+    "meta.home.title": "Descargador de Reels · YouTube en beta – InstaFetch",
     "meta.home.description":
-      "Descarga Reels públicos de Instagram y vídeos públicos de YouTube con vista previa y la mejor calidad disponible. Otros medios dependen de la disponibilidad anónima.",
+      "Descarga Reels públicos de Instagram con vista previa y la mejor calidad disponible. YouTube está en beta; otros medios dependen de la disponibilidad anónima.",
     "meta.privacy.title": "Privacidad · InstaFetch",
     "meta.privacy.description":
       "Cómo InstaFetch gestiona enlaces públicos de Instagram, YouTube y archivos temporales.",
@@ -481,6 +485,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "error.UNSUPPORTED_MEDIA": "No se expuso ningún formato de vídeo público descargable.",
     "error.PRIVATE_OR_UNAVAILABLE": "Este contenido es privado o no está disponible. Solo se puede descargar contenido público.",
     "error.LOGIN_REQUIRED": "Este contenido no está disponible para descarga anónima. La plataforma puede requerir iniciar sesión.",
+    "error.YOUTUBE_LOGIN_REQUIRED": "YouTube no permitió el acceso anónimo a este vídeo desde el servidor actual. Puedes probar otro vídeo público más tarde.",
     "error.RATE_LIMITED": "El servicio está ocupado. Espera un momento e inténtalo de nuevo.",
     "error.SERVER_BUSY": "El servidor está ocupado. Inténtalo de nuevo en unos momentos.",
     "error.EXTRACTION_TIMEOUT": "La comprobación del contenido público tardó demasiado. Inténtalo de nuevo.",
@@ -504,6 +509,7 @@ const messages: Record<Locale, Record<string, string>> = {
     mobileNavigation: "Navigation mobile",
     "menu.open": "Ouvrir le menu",
     "menu.close": "Fermer le menu",
+    skipToContent: "Aller au contenu",
     "brand.home": "Accueil InstaFetch",
     "nav.video": "Vidéo",
     "nav.photo": "Photo",
@@ -511,11 +517,11 @@ const messages: Record<Locale, Record<string, string>> = {
     "nav.story": "Story",
     "nav.carousel": "Carrousel",
     "nav.faq": "FAQ",
-    "hero.kicker": "Reels vérifiés + vidéos YouTube",
+    "hero.kicker": "Reels vérifiés · YouTube en bêta",
     "hero.title": "Téléchargeur",
     "hero.titleAccent": "Instagram",
     "hero.description":
-      "Les Reels Instagram et les vidéos publiques YouTube ont le parcours le plus clair. Les autres médias dépendent d’un fichier authentique exposé sans connexion.",
+      "Téléchargements vérifiés de Reels Instagram. YouTube est en bêta et les autres médias dépendent d’un fichier authentique exposé sans connexion.",
     "hero.noLogin": "Sans connexion",
     "hero.bestQuality": "Meilleure qualité disponible",
     "hero.otherMedia": "Autres médias si disponibles",
@@ -602,7 +608,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "supported.heading":
       "Apportez le lien. Nous montrerons ce qui est vraiment disponible.",
     "supported.intro":
-      "Les Reels et les vidéos publiques YouTube sont nos parcours les plus clairs. Les autres formats dépendent de ce que chaque plateforme expose anonymement.",
+      "Les Reels vérifiés sont notre parcours le plus clair. YouTube est en bêta ; les autres formats dépendent de ce que chaque plateforme expose anonymement.",
     "supported.video.status": "Pris en charge si public",
     "supported.video.title": "Téléchargeur de vidéos Instagram",
     "supported.video.text":
@@ -690,9 +696,9 @@ const messages: Record<Locale, Record<string, string>> = {
     "legal.contact.intro": "Une question ou un problème avec un flux public ?",
     "legal.englishNotice":
       "Le texte juridique détaillé est fourni en anglais pour préserver sa précision.",
-    "meta.home.title": "Téléchargeur de Reels et YouTube – InstaFetch",
+    "meta.home.title": "Téléchargeur de Reels · YouTube en bêta – InstaFetch",
     "meta.home.description":
-      "Téléchargez des Reels Instagram et des vidéos YouTube publiques avec aperçu et la meilleure qualité disponible. Les autres médias dépendent de la disponibilité anonyme.",
+      "Téléchargez des Reels Instagram publics avec aperçu et la meilleure qualité disponible. YouTube est en bêta ; les autres médias dépendent de la disponibilité anonyme.",
     "meta.privacy.title": "Confidentialité · InstaFetch",
     "meta.privacy.description":
       "Comment InstaFetch traite les liens publics Instagram et YouTube et les fichiers temporaires.",
@@ -716,6 +722,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "error.UNSUPPORTED_MEDIA": "Aucun format vidéo public téléchargeable n’a été exposé.",
     "error.PRIVATE_OR_UNAVAILABLE": "Ce média est privé ou indisponible. Seul le contenu public peut être téléchargé.",
     "error.LOGIN_REQUIRED": "Ce média n’est pas disponible pour un téléchargement anonyme. La plateforme peut demander une connexion.",
+    "error.YOUTUBE_LOGIN_REQUIRED": "YouTube n’a pas autorisé l’accès anonyme à cette vidéo depuis le serveur actuel. Vous pouvez essayer une autre vidéo publique plus tard.",
     "error.RATE_LIMITED": "Le service est occupé. Attendez un instant puis réessayez.",
     "error.SERVER_BUSY": "Le serveur est occupé. Réessayez dans un moment.",
     "error.EXTRACTION_TIMEOUT": "La vérification du média public a expiré. Réessayez.",
