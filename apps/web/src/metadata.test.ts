@@ -1,8 +1,15 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { canonicalUrlForPath, metadataForPath } from "./metadata";
 import { siteAssetUrl } from "./site-config";
 
 describe("page metadata", () => {
+  it("keeps the crawler-facing static title Reel-first", () => {
+    const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+    expect(html).toContain("<title>Instagram Reel Downloader · YouTube Beta – InstaFetch</title>");
+    expect(html).not.toContain("Instagram Reel &amp; YouTube Downloader");
+  });
+
   it("keeps the home page truthful and Reel-first", () => {
     const metadata = metadataForPath("/");
     expect(metadata.title).toBe("Instagram Reel Downloader · YouTube Beta – InstaFetch");
