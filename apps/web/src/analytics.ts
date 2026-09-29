@@ -11,7 +11,7 @@ export const ANALYTICS_EVENTS = [
 ] as const;
 
 export type AnalyticsEventName = typeof ANALYTICS_EVENTS[number];
-export type AnalyticsCategory = 'reel' | 'post' | 'story' | 'tv' | 'unknown';
+export type AnalyticsCategory = 'reel' | 'post' | 'story' | 'tv' | 'youtube' | 'unknown';
 
 export interface SafeAnalyticsEvent {
   name: AnalyticsEventName;
@@ -21,9 +21,10 @@ export interface SafeAnalyticsEvent {
 type AnalyticsSink = (event: SafeAnalyticsEvent) => void;
 
 const allowedEvents = new Set<string>(ANALYTICS_EVENTS);
-const allowedCategories = new Set<AnalyticsCategory>(['reel', 'post', 'story', 'tv', 'unknown']);
+const allowedCategories = new Set<AnalyticsCategory>(['reel', 'post', 'story', 'tv', 'youtube', 'unknown']);
 
 export function categoryForSourceType(sourceType: string | undefined): AnalyticsCategory {
+  if (sourceType === 'youtube' || sourceType === 'youtube_video' || sourceType === 'youtube_short') return 'youtube';
   return sourceType && allowedCategories.has(sourceType as AnalyticsCategory)
     ? sourceType as AnalyticsCategory
     : 'unknown';

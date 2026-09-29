@@ -12,10 +12,12 @@ describe('privacy-safe analytics', () => {
     const events: unknown[] = [];
     const client = createAnalytics({ enabled: true, sink: (event) => events.push(event) });
     client.track('resolve_success', 'reel');
+    client.track('resolve_success', 'youtube_video');
     client.track('not_allowed', 'reel');
     client.track('download_failed', 'not-a-category');
     expect(events).toEqual([
       { name: 'resolve_success', category: 'reel' },
+      { name: 'resolve_success', category: 'youtube' },
       { name: 'download_failed', category: 'unknown' },
     ]);
   });

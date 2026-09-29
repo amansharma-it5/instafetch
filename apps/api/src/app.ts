@@ -5,10 +5,13 @@ import helmet from 'helmet';
 import { randomUUID } from 'node:crypto';
 import pino from 'pino';
 import { createInstagramRouter } from './routes/instagram.js';
+import { createYouTubeRouter } from './routes/youtube.js';
 import { createMediaRouter } from './routes/media.js';
 import { ApiError } from './services/errors.js';
 import type { InstagramExtractionProvider } from './services/extraction/InstagramExtractionProvider.js';
+import type { YouTubeExtractionProvider } from './services/extraction/YouTubeExtractionProvider.js';
 import { InstagramProviderChain } from './services/extraction/provider-chain.js';
+import { YtDlpYouTubeProvider } from './services/extraction/YtDlpYouTubeProvider.js';
 import { MediaMaterializer } from './services/media/media-materializer.js';
 import { ResolutionStore } from './services/store/resolution-store.js';
 import { DownloadTokenService, isSecureDownloadTokenSecret } from './services/tokens/download-tokens.js';
@@ -69,11 +72,13 @@ function allowedOrigins(): Set<string> {
 
 export interface AppOptions {
   provider?: InstagramExtractionProvider;
+  youtubeProvider?: YouTubeExtractionProvider;
   store?: ResolutionStore;
   materializer?: MediaMaterializer;
   tokenService?: DownloadTokenService;
   globalRateLimit?: number;
   resolveRateLimit?: number;
+  youtubeResolveRateLimit?: number;
   previewRateLimit?: number;
   downloadRateLimit?: number;
   /** Backwards-compatible override for both media routes. */
@@ -84,6 +89,7 @@ export function createApp(options: AppOptions = {}) {
   const app = express();
   const origins = allowedOrigins();
   const provider = options.provider ?? new InstagramProviderChain();
+  const youtubeProvider = options.youtubeProvider ?? new YtDlpYouTubeProvider();
   const store = options.store ?? new ResolutionStore();
   const materializer = options.materializer ?? new MediaMaterializer();
   const tokenService = options.tokenService ?? createDefaultTokenService();
@@ -146,12 +152,14 @@ export function createApp(options: AppOptions = {}) {
 
   app.get('/health/ready', (_request, response) => {
     const instagramAvailable = provider.isAvailable();
+    const youtubeAvailable = youtubeProvider.isAvailable();
     const ready = instagramAvailable && Boolean(tokenService);
     response.setHeader('Cache-Control', 'no-store');
     response.status(ready ? 200 : 503).json({
       status: ready ? 'ready' : 'not_ready',
       providers: {
         instagram: instagramAvailable,
+        youtube: youtubeAvailable,
       },
     });
   });
@@ -173,6 +181,18 @@ export function createApp(options: AppOptions = {}) {
       handler: rateLimitHandler,
     }),
     createInstagramRouter({ provider, store, tokenService }),
+  );
+
+  app.use(
+    '/api/youtube',
+    rateLimit({
+      windowMs: 60_000,
+      limit: options.youtubeResolveRateLimit ?? 5,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+      handler: rateLimitHandler,
+    }),
+    createYouTubeRouter({ provider: youtubeProvider, store, tokenService }),
   );
 
   const mediaLimit = options.mediaRateLimit;

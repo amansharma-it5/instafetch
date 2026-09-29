@@ -37,10 +37,10 @@ describe('health endpoints', () => {
   });
 
   it('reports readiness', async () => {
-    const response = await request(createApp({ provider })).get('/health/ready');
+    const response = await request(createApp({ provider, youtubeProvider: provider })).get('/health/ready');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: 'ready', providers: { instagram: true } });
+    expect(response.body).toEqual({ status: 'ready', providers: { instagram: true, youtube: true } });
   });
 
   it('returns a safe JSON response for unknown routes without allowing caching', async () => {

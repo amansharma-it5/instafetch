@@ -42,13 +42,13 @@ const reelResponse = {
 
 test('homepage renders the downloader and navigation', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle('Instagram Reel Downloader – InstaFetch');
+  await expect(page).toHaveTitle('Instagram Reel & YouTube Downloader – InstaFetch');
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/favicon.svg');
   const favicon = await page.request.get('/favicon.svg');
   expect(favicon.status()).toBe(200);
   expect(await favicon.text()).toContain('InstaFetch');
-  await expect(page.getByRole('heading', { name: /Instagram Downloader/i })).toBeVisible();
-  await expect(page.getByPlaceholder('Paste Instagram link here')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Instagram & YouTube Downloader/i })).toBeVisible();
+  await expect(page.getByPlaceholder('Paste an Instagram or YouTube link here')).toBeVisible();
   await expect(page.getByRole('link', { name: 'InstaFetch home' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'FAQ' }).first()).toBeVisible();
   await expect(page.getByText('Crafted with love ❤️ by Aman Sharma', { exact: true })).toBeVisible();
@@ -58,14 +58,14 @@ test('homepage renders the downloader and navigation', async ({ page }) => {
   await expect(page.locator('#supported-photo .support-status')).toHaveText('Limited / depends on Instagram access');
   await expect(page.locator('#supported-carousel .support-status')).toHaveText('Limited / compatibility varies');
   await expect(page.locator('#supported-story .support-status')).toHaveText('Limited / compatibility varies');
-  await expect(page.getByText('Verified Reel downloads are our clearest path. Other public media may work when Instagram exposes a genuine file anonymously.')).toBeVisible();
+  await expect(page.getByText('Verified Instagram Reel downloads and public YouTube videos. Other media may work when a genuine file is exposed anonymously.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Why do Reels work when some photos do not?' })).toBeVisible();
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /publicly accessible Instagram Reels/);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://instafetch.pages.dev/');
-  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', 'Instagram Reel Downloader – InstaFetch');
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', 'Instagram Reel & YouTube Downloader – InstaFetch');
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://instafetch.pages.dev/social-preview.png');
   await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute('content', 'https://instafetch.pages.dev/social-preview.png');
-  await expect(page.locator('meta[name="twitter:image:alt"]')).toHaveAttribute('content', 'InstaFetch public Instagram Reel downloader');
+  await expect(page.locator('meta[name="twitter:image:alt"]')).toHaveAttribute('content', 'InstaFetch public Instagram and YouTube downloader');
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/site.webmanifest');
   await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary');
   const jsonLd = await page.locator('script[type="application/ld+json"]').textContent();
@@ -83,9 +83,9 @@ test('rejects an invalid URL before calling the API', async ({ page }) => {
   let apiCalled = false;
   await page.route('**/api/instagram/resolve', async (route) => { apiCalled = true; await route.continue(); });
   await page.goto('/');
-  await page.getByPlaceholder('Paste Instagram link here').fill('https://example.com/not-instagram');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://example.com/not-instagram');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
-  await expect(page.getByText('That link does not look like a supported public Instagram URL.')).toBeVisible();
+  await expect(page.getByText('That link does not look like a supported public Instagram or YouTube URL.')).toBeVisible();
   expect(apiCalled).toBe(false);
 });
 
@@ -98,12 +98,29 @@ test('shows processing and then a real Reel result card', async ({ page }) => {
     await route.fulfill({ status: 200, contentType: 'video/mp4', body: Buffer.concat([Buffer.from('0000ftypisom'), Buffer.alloc(32)]) });
   });
   await page.goto('/');
-  await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/reel/ABC123/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.instagram.com/reel/ABC123/');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(page.getByText('Checking the public post and preparing available media…')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Your media is ready' })).toBeVisible();
   await expect(page.getByText('1080x1920')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Download video' })).toBeVisible();
+});
+
+test('submits a public YouTube video through the platform route', async ({ page }) => {
+  await page.route('**/api/youtube/resolve', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      success: true,
+      data: { platform: 'youtube', sourceType: 'youtube_video', title: 'Public demo video', author: 'Open channel', thumbnail: null, isCarousel: false, itemCount: 1, resolvedItemCount: 1, partial: false, warning: null, items: [{ ...videoItem, durationSeconds: 42, hasAudio: true, hasVideo: true, container: 'mp4' }] },
+    }) });
+  });
+  await page.route('**/api/preview**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'video/mp4', body: Buffer.concat([Buffer.from('0000ftypisom'), Buffer.alloc(32)]) });
+  });
+  await page.goto('/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  await page.getByRole('button', { name: 'Download', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Your media is ready' })).toBeVisible();
+  await expect(page.getByText('Download video')).toBeVisible();
 });
 
 test('renders mixed carousel items independently', async ({ page }) => {
@@ -114,7 +131,7 @@ test('renders mixed carousel items independently', async ({ page }) => {
     }) });
   });
   await page.goto('/');
-  await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/p/ALBUM123/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.instagram.com/p/ALBUM123/');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(page.getByRole('heading', { name: '2 items found' })).toBeVisible();
   await expect(page.getByText('Item 1 of 2')).toBeVisible();
@@ -131,7 +148,7 @@ test('renders a single public photo result', async ({ page }) => {
     }) });
   });
   await page.goto('/');
-  await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/p/PHOTO123/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.instagram.com/p/PHOTO123/');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your media is ready' })).toBeVisible();
   await expect(page.locator('#results').getByText('Photo', { exact: true })).toBeVisible();
@@ -155,7 +172,7 @@ test('shows an explicit warning for a partial carousel without fabricating an it
     }) });
   });
   await page.goto('/');
-  await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/p/PARTIAL123/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.instagram.com/p/PARTIAL123/');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(page.getByRole('heading', { name: '2 of 3 items available' })).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'Some carousel items were unavailable.' })).toBeVisible();
@@ -175,12 +192,12 @@ test('maps provider errors and network failures to friendly status text', async 
     }
   });
   await page.goto('/');
-  await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/reel/RATE123/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.instagram.com/reel/RATE123/');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(page.getByText('The service is busy right now. Wait a moment, then try again.')).toBeVisible();
   await expect(page.getByText('internal detail')).not.toBeVisible();
 
-  await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/reel/NETWORK123/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.instagram.com/reel/NETWORK123/');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(page.getByText('We could not reach InstaFetch. Check your connection and try again.')).toBeVisible();
 });
@@ -197,7 +214,7 @@ test('shows a cold-start message and can retry a failed request', async ({ page 
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(reelResponse) });
   });
   await page.goto('/');
-  await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/reel/COLDSTART123/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.instagram.com/reel/COLDSTART123/');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(page.getByText('Server is waking up. This can take up to a minute on the free hosting plan.')).toBeVisible({ timeout: 8_000 });
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible({ timeout: 12_000 });
@@ -219,9 +236,9 @@ test('maps anonymous availability errors to capability-aware copy', async ({ pag
     {
       code: 'LOGIN_REQUIRED',
       status: 401,
-      expected: 'This post is not available for anonymous download. Instagram may require login for this content.',
+      expected: 'This media is not available for anonymous download. The platform may require login for this content.',
     },
-    { code: 'PRIVATE_OR_UNAVAILABLE', status: 404, expected: 'This post is private or unavailable. Only public content can be downloaded.' },
+    { code: 'PRIVATE_OR_UNAVAILABLE', status: 404, expected: 'This media is private or unavailable. Only public content can be downloaded.' },
     { code: 'SERVER_BUSY', status: 503, expected: 'Server is busy right now. Please try again shortly.' },
     { code: 'EXTRACTION_FAILED', status: 502, expected: /We could not resolve that media\./ },
   ];
@@ -236,7 +253,7 @@ test('maps anonymous availability errors to capability-aware copy', async ({ pag
   });
   await page.goto('/');
   for (const current of cases) {
-    await page.getByPlaceholder('Paste Instagram link here').fill(`https://www.instagram.com/reel/${current.code}/`);
+    await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill(`https://www.instagram.com/reel/${current.code}/`);
     await page.getByRole('button', { name: 'Download', exact: true }).click();
     await expect(page.getByText(current.expected)).toBeVisible();
   }
@@ -257,7 +274,7 @@ test('prevents duplicate download requests and offers a retry after a recoverabl
     await route.fulfill({ status: 200, contentType: 'video/mp4', body: Buffer.concat([Buffer.from('0000ftypisom'), Buffer.alloc(32)]) });
   });
   await page.goto('/');
-  await page.getByPlaceholder('Paste Instagram link here').fill('https://www.instagram.com/reel/DOWNLOAD123/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.instagram.com/reel/DOWNLOAD123/');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
   const link = page.locator('.download-link');
   await link.click();

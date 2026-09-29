@@ -25,27 +25,27 @@ const messages: Record<Locale, Record<string, string>> = {
     "nav.story": "Story",
     "nav.carousel": "Carousel",
     "nav.faq": "FAQ",
-    "hero.kicker": "Verified Reel downloads",
-    "hero.title": "Instagram",
+    "hero.kicker": "Verified Reels + YouTube videos",
+    "hero.title": "Instagram & YouTube",
     "hero.titleAccent": "Downloader",
     "hero.description":
-      "Verified Reel downloads are our clearest path. Other public media may work when Instagram exposes a genuine file anonymously.",
+      "Verified Instagram Reel downloads and public YouTube videos. Other media may work when a genuine file is exposed anonymously.",
     "hero.noLogin": "No login",
     "hero.bestQuality": "Best available quality",
     "hero.otherMedia": "Other media when available",
-    "input.label": "Instagram URL",
-    "input.placeholder": "Paste Instagram link here",
+    "input.label": "Instagram or YouTube URL",
+    "input.placeholder": "Paste an Instagram or YouTube link here",
     "input.help":
-      "Public links only. Availability depends on what Instagram exposes without login.",
+      "Public links only. Availability depends on what each platform exposes without login.",
     "input.paste": "Paste",
     "input.clear": "Clear",
-    "input.clearAria": "Clear Instagram URL",
+    "input.clearAria": "Clear Instagram or YouTube URL",
     "input.pasted": "Link pasted",
     "input.clipboardEmpty": "Clipboard is empty",
     "input.clipboardDenied": "Allow clipboard access to paste automatically",
     "input.resolving": "Resolving…",
     "input.download": "Download",
-    "panel.footnote": "Public content only · No login required",
+    "panel.footnote": "Public content only · No login required · Playlists are not supported",
     "status.processing":
       "Checking the public post and preparing available media…",
     "status.waking":
@@ -72,7 +72,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "results.itemsAvailable": "items available",
     "results.mediaReady": "Your media is ready",
     "results.sharedBy": "Shared by",
-    "results.publicMedia": "Public Instagram media",
+    "results.publicMedia": "Public Instagram or YouTube media",
     "results.partial": "Some carousel items were unavailable.",
     "principles.label": "InstaFetch principles",
     "principles.public": "Public by design",
@@ -87,7 +87,7 @@ const messages: Record<Locale, Record<string, string>> = {
       "Three small steps keep the experience clear and let you stay in control of what gets downloaded.",
     "how.step1.title": "Copy the link",
     "how.step1.text":
-      "Copy the URL of a public Instagram post, Reel, photo, or carousel.",
+      "Copy the URL of a public Instagram post, Reel, photo, carousel, or YouTube video.",
     "how.step2.title": "Paste it here",
     "how.step2.text":
       "Drop the link into InstaFetch and let the public media provider check anonymous availability.",
@@ -113,7 +113,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "supported.eyebrow": "Supported content",
     "supported.heading": "Bring the link. We’ll show what’s really there.",
     "supported.intro":
-      "Reels are our verified path. Other formats remain conditional on what Instagram exposes anonymously.",
+      "Reels and public YouTube videos are our clearest paths. Other formats remain conditional on what each platform exposes anonymously.",
     "supported.video.status": "Supported when publicly accessible",
     "supported.video.title": "Instagram Video Downloader",
     "supported.video.text":
@@ -134,6 +134,14 @@ const messages: Record<Locale, Record<string, string>> = {
     "supported.carousel.title": "Instagram Carousel Downloader",
     "supported.carousel.text":
       "Items are shown individually when the public provider exposes each asset.",
+    "supported.youtube.status": "Beta / public videos only",
+    "supported.youtube.title": "YouTube Video Downloader",
+    "supported.youtube.text":
+      "Public YouTube videos up to 20 minutes can be downloaded when anonymous formats are available.",
+    "supported.shorts.status": "Beta / public Shorts only",
+    "supported.shorts.title": "YouTube Shorts Downloader",
+    "supported.shorts.text":
+      "Shorts use the same safe public-video path and remain subject to format availability.",
     "supported.learn": "Learn how it works",
     "faq.eyebrow": "Questions, answered",
     "faq.heading": "Good to know before you download.",
@@ -178,10 +186,10 @@ const messages: Record<Locale, Record<string, string>> = {
     "footer.terms": "Terms",
     "footer.disclaimer": "Disclaimer",
     "footer.contact": "Contact",
-    "footer.publicNotice": "For publicly accessible Instagram content only.",
+    "footer.publicNotice": "For publicly accessible Instagram and YouTube content only.",
     "legal.privacy.title": "Privacy at InstaFetch",
     "legal.privacy.intro":
-      "InstaFetch is designed to resolve public Instagram links without asking for Instagram account credentials.",
+      "InstaFetch is designed to resolve public Instagram and YouTube links without asking for account credentials.",
     "legal.terms.title": "Terms of use",
     "legal.terms.intro":
       "Use InstaFetch responsibly and only with media you are allowed to access and save.",
@@ -194,18 +202,28 @@ const messages: Record<Locale, Record<string, string>> = {
     "legal.englishNotice":
       "Detailed legal text is provided in English for accuracy.",
     "error.INVALID_INSTAGRAM_URL":
-      "That link does not look like a supported public Instagram URL.",
+      "That link does not look like a supported public Instagram or YouTube URL.",
+    "error.INVALID_YOUTUBE_URL":
+      "That link does not look like a supported public YouTube video or Shorts URL.",
+    "error.PLAYLIST_NOT_SUPPORTED":
+      "Playlist links are not supported. Paste one YouTube video link at a time.",
+    "error.MEDIA_TOO_LONG": "Videos longer than 20 minutes are not supported.",
+    "error.PRIVATE_MEDIA": "This YouTube video is private or unavailable.",
+    "error.AGE_RESTRICTED": "Age-restricted YouTube videos are not available anonymously.",
+    "error.LIVE_NOT_AVAILABLE": "Live YouTube streams are not supported.",
+    "error.DRM_UNSUPPORTED": "DRM-protected media is not supported.",
+    "error.UNSUPPORTED_MEDIA": "No downloadable public video format was exposed.",
     "error.PRIVATE_OR_UNAVAILABLE":
-      "This post is private or unavailable. Only public content can be downloaded.",
+      "This media is private or unavailable. Only public content can be downloaded.",
     "error.LOGIN_REQUIRED":
-      "This post is not available for anonymous download. Instagram may require login for this content.",
+      "This media is not available for anonymous download. The platform may require login for this content.",
     "error.RATE_LIMITED":
       "The service is busy right now. Wait a moment, then try again.",
     "error.SERVER_BUSY": "Server is busy right now. Please try again shortly.",
     "error.EXTRACTION_TIMEOUT":
       "The public media check timed out. Please try again.",
     "error.EXTRACTION_FAILED":
-      "We could not resolve that media. Availability depends on what Instagram exposes publicly without login.",
+      "We could not resolve that media. Availability depends on what the platform exposes publicly without login.",
     "error.PROVIDER_UNAVAILABLE":
       "The media service is waking up or temporarily unavailable. Please try again shortly.",
     "error.PROVIDER_MALFORMED_RESPONSE":
@@ -229,12 +247,12 @@ const messages: Record<Locale, Record<string, string>> = {
     "error.DOWNLOAD_FAILED":
       "The download could not be prepared. Resolve the link again and retry.",
     "error.fallback": "Something went wrong. Please try again.",
-    "meta.home.title": "Instagram Reel Downloader – InstaFetch",
+    "meta.home.title": "Instagram Reel & YouTube Downloader – InstaFetch",
     "meta.home.description":
-      "Download publicly accessible Instagram Reels with preview and the best available quality. Other public media may work when Instagram exposes downloadable files anonymously.",
+      "Download publicly accessible Instagram Reels and public YouTube videos with preview and the best available quality. Other media remains conditional on anonymous availability.",
     "meta.privacy.title": "Privacy · InstaFetch",
     "meta.privacy.description":
-      "Learn how InstaFetch handles public Instagram links, temporary media, and privacy-safe requests.",
+      "Learn how InstaFetch handles public Instagram and YouTube links, temporary media, and privacy-safe requests.",
     "meta.terms.title": "Terms of use · InstaFetch",
     "meta.terms.description":
       "Read the InstaFetch terms for responsible use of publicly accessible Instagram media.",
@@ -258,27 +276,27 @@ const messages: Record<Locale, Record<string, string>> = {
     "nav.story": "Historia",
     "nav.carousel": "Carrusel",
     "nav.faq": "Preguntas frecuentes",
-    "hero.kicker": "Descargas de Reels verificadas",
+    "hero.kicker": "Reels verificados + vídeos de YouTube",
     "hero.title": "Descargador de",
     "hero.titleAccent": "Instagram",
     "hero.description":
-      "Las descargas de Reels son nuestro camino verificado. Otros contenidos públicos pueden funcionar cuando Instagram expone un archivo genuino sin iniciar sesión.",
+      "Los Reels de Instagram y los vídeos públicos de YouTube tienen el camino más claro. Otros contenidos dependen de que se exponga un archivo genuino sin iniciar sesión.",
     "hero.noLogin": "Sin inicio de sesión",
     "hero.bestQuality": "Mejor calidad disponible",
     "hero.otherMedia": "Otros medios cuando estén disponibles",
-    "input.label": "URL de Instagram",
-    "input.placeholder": "Pega aquí el enlace de Instagram",
+    "input.label": "URL de Instagram o YouTube",
+    "input.placeholder": "Pega aquí un enlace de Instagram o YouTube",
     "input.help":
-      "Solo enlaces públicos. La disponibilidad depende de lo que Instagram exponga sin iniciar sesión.",
+      "Solo enlaces públicos. La disponibilidad depende de lo que cada plataforma exponga sin iniciar sesión.",
     "input.paste": "Pegar",
     "input.clear": "Borrar",
-    "input.clearAria": "Borrar URL de Instagram",
+    "input.clearAria": "Borrar URL de Instagram o YouTube",
     "input.pasted": "Enlace pegado",
     "input.clipboardEmpty": "El portapapeles está vacío",
     "input.clipboardDenied":
       "Permite el acceso al portapapeles para pegar automáticamente",
     "input.resolving": "Resolviendo…",
-    "panel.footnote": "Solo contenido público · No se necesita iniciar sesión",
+    "panel.footnote": "Solo contenido público · Sin inicio de sesión · No se admiten listas",
     "input.download": "Descargar",
     "status.processing":
       "Comprobando la publicación pública y preparando los medios disponibles…",
@@ -308,7 +326,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "results.itemsAvailable": "elementos disponibles",
     "results.mediaReady": "Tu contenido está listo",
     "results.sharedBy": "Compartido por",
-    "results.publicMedia": "Contenido público de Instagram",
+    "results.publicMedia": "Contenido público de Instagram o YouTube",
     "results.partial": "Algunos elementos del carrusel no están disponibles.",
     "principles.label": "Principios de InstaFetch",
     "principles.public": "Público por diseño",
@@ -323,7 +341,7 @@ const messages: Record<Locale, Record<string, string>> = {
       "Tres pasos sencillos mantienen clara la experiencia y te dejan controlar lo que descargas.",
     "how.step1.title": "Copia el enlace",
     "how.step1.text":
-      "Copia la URL de una publicación, Reel, foto o carrusel público de Instagram.",
+      "Copia la URL de una publicación, Reel, foto o carrusel público de Instagram, o de un vídeo de YouTube.",
     "how.step2.title": "Pégalo aquí",
     "how.step2.text":
       "Pega el enlace en InstaFetch y comprueba la disponibilidad anónima del contenido público.",
@@ -350,7 +368,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "supported.heading":
       "Trae el enlace. Mostraremos lo que realmente esté disponible.",
     "supported.intro":
-      "Los Reels son nuestro camino verificado. Los demás formatos dependen de lo que Instagram exponga de forma anónima.",
+      "Los Reels y los vídeos públicos de YouTube son nuestros caminos más claros. Los demás formatos dependen de lo que cada plataforma exponga anónimamente.",
     "supported.video.status": "Compatible cuando es público",
     "supported.video.title": "Descargador de vídeos de Instagram",
     "supported.video.text":
@@ -371,6 +389,14 @@ const messages: Record<Locale, Record<string, string>> = {
     "supported.carousel.title": "Descargador de carruseles de Instagram",
     "supported.carousel.text":
       "Los elementos se muestran por separado cuando el proveedor público expone cada recurso.",
+    "supported.youtube.status": "Beta / solo vídeos públicos",
+    "supported.youtube.title": "Descargador de vídeos de YouTube",
+    "supported.youtube.text":
+      "Los vídeos públicos de YouTube de hasta 20 minutos funcionan cuando hay formatos anónimos disponibles.",
+    "supported.shorts.status": "Beta / solo Shorts públicos",
+    "supported.shorts.title": "Descargador de YouTube Shorts",
+    "supported.shorts.text":
+      "Los Shorts usan el mismo flujo seguro y dependen de la disponibilidad del formato.",
     "supported.learn": "Cómo funciona",
     "faq.eyebrow": "Preguntas y respuestas",
     "faq.heading": "Lo que conviene saber antes de descargar.",
@@ -415,10 +441,10 @@ const messages: Record<Locale, Record<string, string>> = {
     "footer.terms": "Términos",
     "footer.disclaimer": "Aviso",
     "footer.contact": "Contacto",
-    "footer.publicNotice": "Solo para contenido público de Instagram.",
+    "footer.publicNotice": "Solo para contenido público de Instagram y YouTube.",
     "legal.privacy.title": "Privacidad en InstaFetch",
     "legal.privacy.intro":
-      "InstaFetch resuelve enlaces públicos de Instagram sin pedir credenciales de la cuenta.",
+      "InstaFetch resuelve enlaces públicos de Instagram y YouTube sin pedir credenciales de la cuenta.",
     "legal.terms.title": "Términos de uso",
     "legal.terms.intro":
       "Usa InstaFetch de forma responsable y solo con contenido que puedas guardar legalmente.",
@@ -429,12 +455,12 @@ const messages: Record<Locale, Record<string, string>> = {
     "legal.contact.intro": "¿Tienes una pregunta o encontraste un problema?",
     "legal.englishNotice":
       "El texto legal detallado se muestra en inglés para mantener su precisión.",
-    "meta.home.title": "Descargador de Reels de Instagram – InstaFetch",
+    "meta.home.title": "Descargador de Reels y YouTube – InstaFetch",
     "meta.home.description":
-      "Descarga Reels públicos de Instagram con vista previa y la mejor calidad disponible. Otros medios pueden funcionar cuando Instagram expone archivos descargables anónimamente.",
+      "Descarga Reels públicos de Instagram y vídeos públicos de YouTube con vista previa y la mejor calidad disponible. Otros medios dependen de la disponibilidad anónima.",
     "meta.privacy.title": "Privacidad · InstaFetch",
     "meta.privacy.description":
-      "Cómo InstaFetch gestiona enlaces públicos de Instagram y archivos temporales.",
+      "Cómo InstaFetch gestiona enlaces públicos de Instagram, YouTube y archivos temporales.",
     "meta.terms.title": "Términos de uso · InstaFetch",
     "meta.terms.description":
       "Condiciones para usar InstaFetch con contenido público de Instagram.",
@@ -444,13 +470,21 @@ const messages: Record<Locale, Record<string, string>> = {
     "meta.contact.title": "Contacto · InstaFetch",
     "meta.contact.description":
       "Orientación para contactar sobre problemas con InstaFetch.",
-    "error.INVALID_INSTAGRAM_URL": "Ese enlace no parece una URL pública de Instagram compatible.",
-    "error.PRIVATE_OR_UNAVAILABLE": "Esta publicación es privada o no está disponible. Solo se puede descargar contenido público.",
-    "error.LOGIN_REQUIRED": "Esta publicación no está disponible para descarga anónima. Instagram puede requerir iniciar sesión.",
+    "error.INVALID_INSTAGRAM_URL": "Ese enlace no parece una URL pública compatible de Instagram o YouTube.",
+    "error.INVALID_YOUTUBE_URL": "Ese enlace no parece un vídeo o Short público de YouTube compatible.",
+    "error.PLAYLIST_NOT_SUPPORTED": "No se admiten listas. Pega un enlace de vídeo de YouTube cada vez.",
+    "error.MEDIA_TOO_LONG": "No se admiten vídeos de más de 20 minutos.",
+    "error.PRIVATE_MEDIA": "Este vídeo de YouTube es privado o no está disponible.",
+    "error.AGE_RESTRICTED": "Los vídeos de YouTube con restricción de edad no están disponibles anónimamente.",
+    "error.LIVE_NOT_AVAILABLE": "No se admiten transmisiones en directo de YouTube.",
+    "error.DRM_UNSUPPORTED": "No se admite contenido protegido por DRM.",
+    "error.UNSUPPORTED_MEDIA": "No se expuso ningún formato de vídeo público descargable.",
+    "error.PRIVATE_OR_UNAVAILABLE": "Este contenido es privado o no está disponible. Solo se puede descargar contenido público.",
+    "error.LOGIN_REQUIRED": "Este contenido no está disponible para descarga anónima. La plataforma puede requerir iniciar sesión.",
     "error.RATE_LIMITED": "El servicio está ocupado. Espera un momento e inténtalo de nuevo.",
     "error.SERVER_BUSY": "El servidor está ocupado. Inténtalo de nuevo en unos momentos.",
     "error.EXTRACTION_TIMEOUT": "La comprobación del contenido público tardó demasiado. Inténtalo de nuevo.",
-    "error.EXTRACTION_FAILED": "No pudimos resolver ese contenido. La disponibilidad depende de lo que Instagram exponga sin iniciar sesión.",
+    "error.EXTRACTION_FAILED": "No pudimos resolver ese contenido. La disponibilidad depende de lo que la plataforma exponga sin iniciar sesión.",
     "error.PROVIDER_UNAVAILABLE": "El servicio de medios no está disponible temporalmente. Inténtalo de nuevo pronto.",
     "error.PROVIDER_MALFORMED_RESPONSE": "Ese enlace no devolvió un resultado de contenido público utilizable.",
     "error.NETWORK_FAILURE": "No pudimos conectar con InstaFetch. Comprueba tu conexión e inténtalo de nuevo.",
@@ -477,27 +511,27 @@ const messages: Record<Locale, Record<string, string>> = {
     "nav.story": "Story",
     "nav.carousel": "Carrousel",
     "nav.faq": "FAQ",
-    "hero.kicker": "Téléchargements de Reels vérifiés",
+    "hero.kicker": "Reels vérifiés + vidéos YouTube",
     "hero.title": "Téléchargeur",
     "hero.titleAccent": "Instagram",
     "hero.description":
-      "Les téléchargements de Reels sont notre parcours vérifié. Les autres médias publics peuvent fonctionner quand Instagram expose un fichier authentique sans connexion.",
+      "Les Reels Instagram et les vidéos publiques YouTube ont le parcours le plus clair. Les autres médias dépendent d’un fichier authentique exposé sans connexion.",
     "hero.noLogin": "Sans connexion",
     "hero.bestQuality": "Meilleure qualité disponible",
     "hero.otherMedia": "Autres médias si disponibles",
-    "input.label": "URL Instagram",
-    "input.placeholder": "Collez le lien Instagram ici",
+    "input.label": "URL Instagram ou YouTube",
+    "input.placeholder": "Collez un lien Instagram ou YouTube ici",
     "input.help":
-      "Liens publics uniquement. La disponibilité dépend de ce qu’Instagram expose sans connexion.",
+      "Liens publics uniquement. La disponibilité dépend de ce que chaque plateforme expose sans connexion.",
     "input.paste": "Coller",
     "input.clear": "Effacer",
-    "input.clearAria": "Effacer l’URL Instagram",
+    "input.clearAria": "Effacer l’URL Instagram ou YouTube",
     "input.pasted": "Lien collé",
     "input.clipboardEmpty": "Le presse-papiers est vide",
     "input.clipboardDenied":
       "Autorisez le presse-papiers pour coller automatiquement",
     "input.resolving": "Résolution…",
-    "panel.footnote": "Contenu public uniquement · Aucune connexion requise",
+    "panel.footnote": "Contenu public uniquement · Sans connexion · Les playlists ne sont pas prises en charge",
     "input.download": "Télécharger",
     "status.processing":
       "Vérification de la publication publique et préparation des médias disponibles…",
@@ -526,7 +560,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "results.itemsAvailable": "éléments disponibles",
     "results.mediaReady": "Votre média est prêt",
     "results.sharedBy": "Partagé par",
-    "results.publicMedia": "Média Instagram public",
+    "results.publicMedia": "Média public Instagram ou YouTube",
     "results.partial": "Certains éléments du carrousel sont indisponibles.",
     "principles.label": "Principes InstaFetch",
     "principles.public": "Public par conception",
@@ -541,7 +575,7 @@ const messages: Record<Locale, Record<string, string>> = {
       "Trois étapes gardent l’expérience claire et vous laissent contrôler ce qui est téléchargé.",
     "how.step1.title": "Copiez le lien",
     "how.step1.text":
-      "Copiez l’URL d’une publication, d’un Reel, d’une photo ou d’un carrousel Instagram public.",
+      "Copiez l’URL d’une publication, d’un Reel, d’une photo ou d’un carrousel Instagram public, ou d’une vidéo YouTube.",
     "how.step2.title": "Collez-le ici",
     "how.step2.text":
       "Collez le lien dans InstaFetch et vérifiez la disponibilité anonyme du média public.",
@@ -568,7 +602,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "supported.heading":
       "Apportez le lien. Nous montrerons ce qui est vraiment disponible.",
     "supported.intro":
-      "Les Reels sont notre parcours vérifié. Les autres formats dépendent de ce qu’Instagram expose anonymement.",
+      "Les Reels et les vidéos publiques YouTube sont nos parcours les plus clairs. Les autres formats dépendent de ce que chaque plateforme expose anonymement.",
     "supported.video.status": "Pris en charge si public",
     "supported.video.title": "Téléchargeur de vidéos Instagram",
     "supported.video.text":
@@ -589,6 +623,14 @@ const messages: Record<Locale, Record<string, string>> = {
     "supported.carousel.title": "Téléchargeur de carrousels Instagram",
     "supported.carousel.text":
       "Les éléments sont affichés séparément lorsque le fournisseur public expose chaque ressource.",
+    "supported.youtube.status": "Bêta / vidéos publiques uniquement",
+    "supported.youtube.title": "Téléchargeur de vidéos YouTube",
+    "supported.youtube.text":
+      "Les vidéos YouTube publiques de moins de 20 minutes fonctionnent lorsque des formats anonymes sont disponibles.",
+    "supported.shorts.status": "Bêta / Shorts publics uniquement",
+    "supported.shorts.title": "Téléchargeur de YouTube Shorts",
+    "supported.shorts.text":
+      "Les Shorts utilisent le même parcours sécurisé et dépendent de la disponibilité du format.",
     "supported.learn": "Voir le fonctionnement",
     "faq.eyebrow": "Questions et réponses",
     "faq.heading": "À savoir avant de télécharger.",
@@ -634,10 +676,10 @@ const messages: Record<Locale, Record<string, string>> = {
     "footer.terms": "Conditions",
     "footer.disclaimer": "Avertissement",
     "footer.contact": "Contact",
-    "footer.publicNotice": "Pour les contenus Instagram publics uniquement.",
+    "footer.publicNotice": "Pour les contenus Instagram et YouTube publics uniquement.",
     "legal.privacy.title": "Confidentialité chez InstaFetch",
     "legal.privacy.intro":
-      "InstaFetch résout les liens Instagram publics sans demander les identifiants du compte.",
+      "InstaFetch résout les liens publics Instagram et YouTube sans demander les identifiants du compte.",
     "legal.terms.title": "Conditions d’utilisation",
     "legal.terms.intro":
       "Utilisez InstaFetch de manière responsable avec les médias que vous pouvez enregistrer.",
@@ -648,12 +690,12 @@ const messages: Record<Locale, Record<string, string>> = {
     "legal.contact.intro": "Une question ou un problème avec un flux public ?",
     "legal.englishNotice":
       "Le texte juridique détaillé est fourni en anglais pour préserver sa précision.",
-    "meta.home.title": "Téléchargeur de Reels Instagram – InstaFetch",
+    "meta.home.title": "Téléchargeur de Reels et YouTube – InstaFetch",
     "meta.home.description":
-      "Téléchargez des Reels Instagram publics avec aperçu et la meilleure qualité disponible. Les autres médias dépendent des fichiers exposés anonymement par Instagram.",
+      "Téléchargez des Reels Instagram et des vidéos YouTube publiques avec aperçu et la meilleure qualité disponible. Les autres médias dépendent de la disponibilité anonyme.",
     "meta.privacy.title": "Confidentialité · InstaFetch",
     "meta.privacy.description":
-      "Comment InstaFetch traite les liens Instagram publics et les fichiers temporaires.",
+      "Comment InstaFetch traite les liens publics Instagram et YouTube et les fichiers temporaires.",
     "meta.terms.title": "Conditions d’utilisation · InstaFetch",
     "meta.terms.description":
       "Conditions d’utilisation responsable des médias Instagram publics avec InstaFetch.",
@@ -663,13 +705,21 @@ const messages: Record<Locale, Record<string, string>> = {
     "meta.contact.title": "Contact · InstaFetch",
     "meta.contact.description":
       "Conseils pour signaler un problème avec InstaFetch.",
-    "error.INVALID_INSTAGRAM_URL": "Ce lien ne ressemble pas à une URL Instagram publique compatible.",
-    "error.PRIVATE_OR_UNAVAILABLE": "Cette publication est privée ou indisponible. Seul le contenu public peut être téléchargé.",
-    "error.LOGIN_REQUIRED": "Cette publication n’est pas disponible pour un téléchargement anonyme. Instagram peut demander une connexion.",
+    "error.INVALID_INSTAGRAM_URL": "Ce lien ne ressemble pas à une URL publique Instagram ou YouTube compatible.",
+    "error.INVALID_YOUTUBE_URL": "Ce lien ne ressemble pas à une vidéo ou un Short YouTube public compatible.",
+    "error.PLAYLIST_NOT_SUPPORTED": "Les playlists ne sont pas prises en charge. Collez un lien vidéo YouTube à la fois.",
+    "error.MEDIA_TOO_LONG": "Les vidéos de plus de 20 minutes ne sont pas prises en charge.",
+    "error.PRIVATE_MEDIA": "Cette vidéo YouTube est privée ou indisponible.",
+    "error.AGE_RESTRICTED": "Les vidéos YouTube soumises à une restriction d’âge ne sont pas disponibles anonymement.",
+    "error.LIVE_NOT_AVAILABLE": "Les diffusions YouTube en direct ne sont pas prises en charge.",
+    "error.DRM_UNSUPPORTED": "Les médias protégés par DRM ne sont pas pris en charge.",
+    "error.UNSUPPORTED_MEDIA": "Aucun format vidéo public téléchargeable n’a été exposé.",
+    "error.PRIVATE_OR_UNAVAILABLE": "Ce média est privé ou indisponible. Seul le contenu public peut être téléchargé.",
+    "error.LOGIN_REQUIRED": "Ce média n’est pas disponible pour un téléchargement anonyme. La plateforme peut demander une connexion.",
     "error.RATE_LIMITED": "Le service est occupé. Attendez un instant puis réessayez.",
     "error.SERVER_BUSY": "Le serveur est occupé. Réessayez dans un moment.",
     "error.EXTRACTION_TIMEOUT": "La vérification du média public a expiré. Réessayez.",
-    "error.EXTRACTION_FAILED": "Impossible de résoudre ce média. La disponibilité dépend de ce qu’Instagram expose sans connexion.",
+    "error.EXTRACTION_FAILED": "Impossible de résoudre ce média. La disponibilité dépend de ce que la plateforme expose sans connexion.",
     "error.PROVIDER_UNAVAILABLE": "Le service média est temporairement indisponible. Réessayez bientôt.",
     "error.PROVIDER_MALFORMED_RESPONSE": "Ce lien n’a pas renvoyé de résultat média public utilisable.",
     "error.NETWORK_FAILURE": "Impossible de joindre InstaFetch. Vérifiez votre connexion puis réessayez.",
