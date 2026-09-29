@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import type { InstagramRoute } from '@instafetch/shared';
 import type { InternalMediaItem } from '../extraction/normalize-instagram.js';
 
 export interface StoredResolution {
@@ -7,7 +6,8 @@ export interface StoredResolution {
   canonicalUrl: string;
   createdAt: number;
   expiresAt: number;
-  sourceType: InstagramRoute;
+  sourceType: string;
+  platform?: 'instagram' | 'youtube';
   title: string | null;
   author: string | null;
   thumbnailUrl: string | null;

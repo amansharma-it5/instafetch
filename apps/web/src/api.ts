@@ -8,10 +8,15 @@ export interface ResolveMediaItem {
   thumbnail: string | null;
   previewUrl: string;
   downloadUrl: string;
+  durationSeconds?: number | null;
+  hasAudio?: boolean;
+  hasVideo?: boolean;
+  container?: string;
 }
 
 export interface ResolveData {
-  sourceType: 'post' | 'reel' | 'tv' | 'story';
+  platform?: 'instagram' | 'youtube';
+  sourceType: 'post' | 'reel' | 'tv' | 'story' | 'youtube_video' | 'youtube_short';
   title: string | null;
   author: string | null;
   thumbnail: string | null;
@@ -52,7 +57,7 @@ export function mediaUrl(path: string): string {
   return new URL(path, `${API_BASE_URL}/`).toString();
 }
 
-export async function resolveInstagram(url: string, signal?: AbortSignal): Promise<ResolveSuccess> {
+async function resolveAt(path: string, url: string, signal?: AbortSignal): Promise<ResolveSuccess> {
   let response: Response;
   const requestController = new AbortController();
   let timedOut = false;
@@ -63,7 +68,7 @@ export async function resolveInstagram(url: string, signal?: AbortSignal): Promi
   const abortRequest = () => requestController.abort();
   signal?.addEventListener('abort', abortRequest, { once: true });
   try {
-    response = await fetch(`${API_BASE_URL}/api/instagram/resolve`, {
+    response = await fetch(`${API_BASE_URL}${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ url }),
@@ -91,4 +96,12 @@ export async function resolveInstagram(url: string, signal?: AbortSignal): Promi
     throw new ApiClientError('NETWORK_FAILURE', 'The service could not process that link.', response.status);
   }
   return payload;
+}
+
+export function resolveInstagram(url: string, signal?: AbortSignal): Promise<ResolveSuccess> {
+  return resolveAt('/api/instagram/resolve', url, signal);
+}
+
+export function resolveYouTube(url: string, signal?: AbortSignal): Promise<ResolveSuccess> {
+  return resolveAt('/api/youtube/resolve', url, signal);
 }

@@ -1,12 +1,12 @@
 # InstaFetch
 
-InstaFetch is a public Instagram media downloader for content that Instagram exposes without authentication. It never collects Instagram credentials, browser cookies, or private-account access.
+InstaFetch is a public Instagram and YouTube media downloader for content that each platform exposes without authentication. It never collects Instagram/YouTube credentials, browser cookies, or private-account access.
 
 The repository is an npm-workspaces monorepo:
 
 - `apps/web`: React, Vite, TypeScript, Tailwind CSS, and React Router frontend.
-- `apps/api`: Express and TypeScript API with yt-dlp/gallery-dl extraction, bounded temporary media storage, and signed media tokens.
-- `packages/shared`: shared URL validation and media types.
+- `apps/api`: Express and TypeScript API with platform extraction adapters, bounded temporary media storage, and signed media tokens.
+- `packages/shared`: shared Instagram/YouTube URL validation and media types.
 
 ## Local development
 
@@ -78,9 +78,10 @@ Frontend variable:
 - **Production URL:** `https://instafetch.pages.dev`
 - **Health checks:** `https://instafetch-nm9b.onrender.com/health/live` and `/health/ready`
 - **Verified support:** public Instagram Reels with anonymous resolve, preview, and download.
-- **Conditional support:** public video posts, photos, carousels, Stories, and legacy TV URLs when Instagram exposes a genuine anonymous media file.
+- **Beta support:** public YouTube videos and Shorts up to 20 minutes when yt-dlp exposes genuine anonymous video and audio formats. One video URL is handled at a time; playlist-only links are rejected.
+- **Conditional support:** Instagram video posts, photos, carousels, Stories, and legacy TV URLs when Instagram exposes a genuine anonymous media file.
 - **Analytics:** disabled by default through `VITE_ANALYTICS_ENABLED=false`. If explicitly enabled, only the allowlisted aggregate event name and safe content category are emitted; URLs, usernames, captions, media URLs, tokens, filenames, IP addresses, and credentials are never included. No third-party tracking vendor is configured.
-- **Production verification:** run `npm run smoke:production` for frontend and health checks. To verify a public Reel without credentials, cookies, or browser profiles, pass one explicitly supplied Reel URL to the same command.
+- **Production verification:** run `npm run smoke:production` for frontend and health checks. To verify a public Reel or YouTube video without credentials, cookies, or browser profiles, pass one explicitly supplied URL to the same command.
 
 ## Deploy the API to Render
 
@@ -122,9 +123,9 @@ The API keeps expensive public-media work bounded for the free hosting footprint
 - API JSON responses, health responses, and temporary preview/download media use `Cache-Control: no-store` so short-lived tokens and files are not retained by shared caches.
 - Expired cache entries are cleaned at most every 60 seconds and all temporary files are removed when the API shuts down. Render's filesystem is ephemeral by design; no permanent user files are expected.
 
-Default request limits are 60 requests/minute globally, 10 resolve requests/minute, 60 preview requests/minute, and 20 download requests/minute per client. These limits protect the provider and the small instance; they are not a guarantee of Instagram availability.
+Default request limits are 60 requests/minute globally, 10 Instagram resolve requests/minute, 5 YouTube resolve requests/minute, 60 preview requests/minute, and 20 download requests/minute per client. These limits protect the providers and the small instance; they are not a guarantee of platform availability.
 
 ## Security and availability
 
-Only public Instagram URLs are accepted. The API validates canonical Instagram routes, uses fixed `spawn(..., { shell: false })` provider arguments, blocks arbitrary proxying, rate-limits requests, and keeps upstream media URLs server-side. Download and preview links are short-lived HMAC tokens. Instagram availability can change, and some public posts may still require login or fail anonymous extraction.
+Only validated public Instagram and YouTube URLs are accepted. The API validates canonical platform routes, uses fixed `spawn(..., { shell: false })` provider arguments, blocks arbitrary proxying, rate-limits requests, and keeps upstream media URLs server-side. Download and preview links are short-lived HMAC tokens. Platform availability can change, and some public media may still require login, exceed the duration/size limits, or fail anonymous extraction. YouTube playlist-only, live, DRM-protected, age-restricted, and over-20-minute URLs are rejected safely.
 Unknown API paths return a safe JSON 404 response, and oversized JSON request bodies are rejected with a bounded 413 response.

@@ -38,7 +38,7 @@ export class MediaMaterializationError extends Error {
 
 export interface MaterializedMedia {
   path: string;
-  contentType: 'video/mp4' | 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'image/avif';
+  contentType: 'video/mp4' | 'video/webm' | 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'image/avif';
   extension: string;
   byteLength: number;
   filename: string;
@@ -122,6 +122,12 @@ function defaultAllowedHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, '');
   return host === 'instagram.com'
     || host === 'www.instagram.com'
+    || host === 'youtube.com'
+    || host === 'www.youtube.com'
+    || host === 'm.youtube.com'
+    || host === 'youtu.be'
+    || host.endsWith('.googlevideo.com')
+    || host.endsWith('.youtube.com')
     || host.endsWith('.cdninstagram.com')
     || host.endsWith('.fbcdn.net')
     || host.endsWith('.fbsbx.com');
@@ -185,15 +191,16 @@ async function defaultRequestUpstream(url: string, timeoutMs: number): Promise<U
   });
 }
 
-function contentTypeFor(kind: 'video' | 'jpeg' | 'png' | 'webp' | 'gif' | 'avif'): MaterializedMedia['contentType'] {
-  return kind === 'video' ? 'video/mp4' : `image/${kind}` as MaterializedMedia['contentType'];
+function contentTypeFor(kind: 'video' | 'webm' | 'jpeg' | 'png' | 'webp' | 'gif' | 'avif'): MaterializedMedia['contentType'] {
+  return kind === 'video' ? 'video/mp4' : kind === 'webm' ? 'video/webm' : `image/${kind}` as MaterializedMedia['contentType'];
 }
 
-function detectKind(buffer: Buffer): 'video' | 'jpeg' | 'png' | 'webp' | 'gif' | 'avif' | null {
+function detectKind(buffer: Buffer): 'video' | 'webm' | 'jpeg' | 'png' | 'webp' | 'gif' | 'avif' | null {
   if (buffer.length >= 12 && buffer.subarray(4, 12).toString('ascii') === 'ftypavif') return 'avif';
   if (buffer.length >= 12 && buffer.subarray(4, 8).toString('ascii') === 'ftyp') {
     return 'video';
   }
+  if (buffer.length >= 4 && buffer.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return 'webm';
   if (buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return 'jpeg';
   if (buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return 'png';
   if (buffer.length >= 12 && buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP') return 'webp';
@@ -315,7 +322,7 @@ export class MediaMaterializer {
     sourceUrl: string,
     targetPath: string,
     expected: 'video' | 'audio' | 'image',
-  ): Promise<{ bytes: number; kind: 'video' | 'jpeg' | 'png' | 'webp' | 'gif' | 'avif' | null }> {
+  ): Promise<{ bytes: number; kind: 'video' | 'webm' | 'jpeg' | 'png' | 'webp' | 'gif' | 'avif' | null }> {
     const source = this.assertSourceUrl(sourceUrl);
     const response = await this.requestFollowingRedirects(source.toString());
     if (response.statusCode === 404 || response.statusCode === 410) {
@@ -340,8 +347,8 @@ export class MediaMaterializer {
       const valid = expected === 'audio'
         ? isAudioContainer(capture.header)
         : expected === 'video'
-          ? kind === 'video'
-          : kind !== null && kind !== 'video';
+          ? kind === 'video' || kind === 'webm'
+      : kind !== null && kind !== 'video' && kind !== 'webm';
       if (!valid) {
         throw new MediaMaterializationError('UPSTREAM_INVALID_CONTENT', 'The upstream response is not valid media');
       }
@@ -488,7 +495,7 @@ export class MediaMaterializer {
         throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The temporary media cache is full');
       }
       this.temporaryPaths.delete(tempPath);
-      const extension = downloaded.kind === 'video' ? 'mp4' : downloaded.kind === 'jpeg' ? 'jpg' : downloaded.kind;
+      const extension = downloaded.kind === 'video' ? 'mp4' : downloaded.kind === 'webm' ? 'webm' : downloaded.kind === 'jpeg' ? 'jpg' : downloaded.kind;
       const cached: CachedMedia = {
         resolutionId,
         mediaId: item.id,

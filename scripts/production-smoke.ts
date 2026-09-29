@@ -1,11 +1,11 @@
-import { parseInstagramUrl } from '@instafetch/shared';
+import { parseInstagramUrl, parseYouTubeUrl, YouTubeUrlError } from '@instafetch/shared';
 
 const frontendOrigin = (process.env.SMOKE_FRONTEND_ORIGIN ?? 'https://instafetch.pages.dev').replace(/\/$/, '');
 const apiOrigin = (process.env.SMOKE_API_ORIGIN ?? 'https://instafetch-nm9b.onrender.com').replace(/\/$/, '');
 const args = process.argv.slice(2);
 
 if (args.length > 1) {
-  console.error('Usage: npm run smoke:production -- [public-reel-url]');
+  console.error('Usage: npm run smoke:production -- [public-reel-or-youtube-url]');
   process.exitCode = 2;
 } else {
   const timeoutMs = 30_000;
@@ -31,15 +31,29 @@ if (args.length > 1) {
     result.healthReady = { status: ready.status, ok: ready.ok };
 
     if (args[0]) {
-      const validated = parseInstagramUrl(args[0]);
-      if (validated.route !== 'reel') throw new Error('The optional smoke-test URL must be a public Reel');
-      const resolved = await fetchWithTimeout(`${apiOrigin}/api/instagram/resolve`, {
+      let path: string;
+      let canonicalUrl: string;
+      let smokeKind: 'reel' | 'youtube';
+      try {
+        const validated = parseInstagramUrl(args[0]);
+        if (validated.route !== 'reel') throw new Error('The optional smoke-test URL must be a public Reel');
+        path = '/api/instagram/resolve';
+        canonicalUrl = validated.canonicalUrl;
+        smokeKind = 'reel';
+      } catch (instagramError) {
+        const validated = parseYouTubeUrl(args[0]);
+        if (instagramError instanceof YouTubeUrlError) throw instagramError;
+        path = '/api/youtube/resolve';
+        canonicalUrl = validated.canonicalUrl;
+        smokeKind = 'youtube';
+      }
+      const resolved = await fetchWithTimeout(`${apiOrigin}${path}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ url: validated.canonicalUrl }),
+        body: JSON.stringify({ url: canonicalUrl }),
       });
       const body = await resolved.json() as { success?: boolean; data?: { sourceType?: string; items?: unknown[] }; error?: { code?: string } };
-      result.reel = {
+      result[smokeKind] = {
         validation: 'passed',
         status: resolved.status,
         success: body.success === true,
@@ -51,7 +65,7 @@ if (args.length > 1) {
     }
 
     console.log(JSON.stringify(result));
-    if (!frontend.ok || !live.ok || !ready.ok || (result.reel && (result.reel as { success: boolean }).success !== true)) {
+    if (!frontend.ok || !live.ok || !ready.ok || (result.reel && (result.reel as { success: boolean }).success !== true) || (result.youtube && (result.youtube as { success: boolean }).success !== true)) {
       process.exitCode = 1;
     }
   } catch (error) {

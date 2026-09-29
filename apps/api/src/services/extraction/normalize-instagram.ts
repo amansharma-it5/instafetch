@@ -20,6 +20,14 @@ export interface InternalMediaItem {
   videoCodec?: string | null;
   audioCodec?: string | null;
   thumbnailUrl: string | null;
+  /** Platform-specific metadata used by the shared materializer. */
+  platform?: 'instagram' | 'youtube';
+  audioFilesize?: number | null;
+  durationSeconds?: number | null;
+  hasVideo?: boolean;
+  hasAudio?: boolean;
+  container?: string | null;
+  sourceType?: string;
 }
 
 export interface NormalizedInstagramResult {
@@ -146,6 +154,11 @@ function itemFromFormat(
     videoCodec: codecValue(format, 'vcodec'),
     audioCodec: codecValue(audioFormat ?? format, 'acodec'),
     thumbnailUrl: stringValue(format.thumbnail),
+    platform: 'instagram',
+    audioFilesize: audioFormat ? numberValue(audioFormat.filesize) ?? numberValue(audioFormat.filesize_approx) : null,
+    hasVideo: type === 'video',
+    hasAudio: Boolean(codecValue(audioFormat ?? format, 'acodec')),
+    container: extension,
   };
 }
 

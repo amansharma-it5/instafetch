@@ -72,6 +72,16 @@ describe('MediaMaterializer', () => {
     await materializer.dispose();
   });
 
+  it('allows YouTube googlevideo hosts while retaining application-mediated materialization', async () => {
+    const materializer = new MediaMaterializer({
+      rootDir: root(),
+      requestUpstream: async () => ({ statusCode: 200, headers: {}, body: Readable.from(videoBytes) }),
+    });
+    const result = await materializer.materialize('youtube-resolution', item('https://rr1.googlevideo.com/videoplayback?id=opaque'), Date.now() + 60_000);
+    expect(result.contentType).toBe('video/mp4');
+    await materializer.dispose();
+  });
+
   it('fails fast when the bounded media concurrency capacity is full', async () => {
     let markStarted!: () => void;
     let unblock!: () => void;

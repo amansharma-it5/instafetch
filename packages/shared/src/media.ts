@@ -1,4 +1,5 @@
 export type MediaType = 'video' | 'photo';
+export type Platform = 'instagram' | 'youtube';
 
 export interface MediaCard {
   type: MediaType;

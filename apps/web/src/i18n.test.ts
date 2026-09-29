@@ -17,6 +17,14 @@ describe("locale messages", () => {
   it("provides localized error copy without falling back to English", () => {
     const errorCodes = [
       "INVALID_INSTAGRAM_URL",
+      "INVALID_YOUTUBE_URL",
+      "PLAYLIST_NOT_SUPPORTED",
+      "MEDIA_TOO_LONG",
+      "PRIVATE_MEDIA",
+      "AGE_RESTRICTED",
+      "LIVE_NOT_AVAILABLE",
+      "DRM_UNSUPPORTED",
+      "UNSUPPORTED_MEDIA",
       "PRIVATE_OR_UNAVAILABLE",
       "LOGIN_REQUIRED",
       "RATE_LIMITED",

@@ -35,12 +35,14 @@ import {
   Trash2,
   X,
   Zap,
+  Youtube,
 } from "lucide-react";
-import { parseInstagramUrl } from "@instafetch/shared";
+import { parseInstagramUrl, parseYouTubeUrl, YouTubeUrlError } from "@instafetch/shared";
 import {
   ApiClientError,
   mediaUrl,
   resolveInstagram,
+  resolveYouTube,
   type ResolveData,
   type ResolveMediaItem,
 } from "./api";
@@ -92,19 +94,27 @@ function useDownloader() {
     event?.preventDefault();
     if (state.status === "processing") return;
     let canonicalUrl: string;
+    let resolveRequest: typeof resolveInstagram = resolveInstagram;
     let sourceCategory: ReturnType<typeof categoryForSourceType> = "unknown";
     try {
       const validated = parseInstagramUrl(value.trim());
       canonicalUrl = validated.canonicalUrl;
+      resolveRequest = resolveInstagram;
       sourceCategory = categoryForSourceType(validated.route);
     } catch {
-      analytics.track("resolve_failed", "unknown");
-      setState({
-        status: "error",
-        code: "INVALID_INSTAGRAM_URL",
-        message: userMessage("INVALID_INSTAGRAM_URL", t),
-      });
-      return;
+      try {
+        const validated = parseYouTubeUrl(value.trim());
+        canonicalUrl = validated.canonicalUrl;
+        resolveRequest = resolveYouTube;
+        sourceCategory = "youtube";
+      } catch (error) {
+        analytics.track("resolve_failed", "unknown");
+        const code = error instanceof YouTubeUrlError && error.code === "PLAYLIST_NOT_SUPPORTED"
+          ? error.code
+          : "INVALID_INSTAGRAM_URL";
+        setState({ status: "error", code, message: userMessage(code, t) });
+        return;
+      }
     }
     controller.current?.abort();
     const nextController = new AbortController();
@@ -118,7 +128,7 @@ function useDownloader() {
       );
     }, SLOW_REQUEST_DELAY_MS);
     try {
-      const response = await resolveInstagram(
+      const response = await resolveRequest(
         canonicalUrl,
         nextController.signal,
       );
@@ -713,6 +723,20 @@ const supported = [
     title: "supported.carousel.title",
     text: "supported.carousel.text",
   },
+  {
+    id: "supported-youtube",
+    icon: Youtube,
+    status: "supported.youtube.status",
+    title: "supported.youtube.title",
+    text: "supported.youtube.text",
+  },
+  {
+    id: "supported-shorts",
+    icon: Play,
+    status: "supported.shorts.status",
+    title: "supported.shorts.title",
+    text: "supported.shorts.text",
+  },
 ];
 const faqs = Array.from({ length: 9 }, (_, index) => [
   `faq.q${index + 1}`,
@@ -991,7 +1015,7 @@ function LegalPage({
             ],
             [
               "What we do not request",
-              "We do not ask for Instagram usernames, passwords, browser cookies, private-account access, or authentication tokens. Do not submit confidential information in the URL field.",
+              "We do not ask for Instagram or YouTube usernames, passwords, browser cookies, private-account access, or authentication tokens. Do not submit confidential information in the URL field.",
             ],
             [
               "Service limits",
@@ -1014,7 +1038,7 @@ function LegalPage({
               ],
               [
                 "Availability",
-                "The service may change as Instagram and public providers change. Download links are temporary and may stop working after their expiry window.",
+                "The service may change as Instagram, YouTube, and public providers change. Download links are temporary and may stop working after their expiry window.",
               ],
             ],
           }
@@ -1025,7 +1049,7 @@ function LegalPage({
               sections: [
                 [
                   "Independent service",
-                  "InstaFetch is not affiliated with, endorsed by, or sponsored by Instagram or Meta. Instagram and related marks belong to their respective owners.",
+                  "InstaFetch is not affiliated with, endorsed by, or sponsored by Instagram, Meta, YouTube, or Google. Those services and related marks belong to their respective owners.",
                 ],
                 [
                   "Use content responsibly",
@@ -1033,7 +1057,7 @@ function LegalPage({
                 ],
                 [
                   "Availability",
-                  "Private content is not accessed. A public post is not guaranteed to be anonymously downloadable; results depend on what Instagram exposes without login and can change without notice.",
+                  "Private content is not accessed. Public media is not guaranteed to be anonymously downloadable; results depend on what Instagram and YouTube expose without login and can change without notice.",
                 ],
               ],
             }
