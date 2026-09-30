@@ -28,11 +28,20 @@ async function startServer(): Promise<void> {
   // A provider startup failure disables YouTube while keeping the API and
   // verified Instagram path available. The readiness response exposes the
   // degraded provider state without leaking startup details.
-  try {
-    await potProvider.start();
-  } catch {
-    process.stderr.write('YouTube token provider unavailable; YouTube extraction is disabled\n');
-  }
+  let retryTimer: NodeJS.Timeout | undefined;
+  const startProvider = async (): Promise<void> => {
+    try {
+      await potProvider.start();
+    } catch {
+      process.stderr.write('YouTube token provider unavailable; YouTube extraction is disabled\n');
+      retryTimer = setTimeout(() => {
+        retryTimer = undefined;
+        void startProvider();
+      }, 15_000);
+      retryTimer.unref();
+    }
+  };
+  await startProvider();
   const youtubeProvider = new YtDlpYouTubeProvider({
     potProvider,
     requirePotProvider: providerEnabled,
@@ -56,6 +65,7 @@ async function startServer(): Promise<void> {
   const shutdown = () => {
     if (shuttingDown) return;
     shuttingDown = true;
+    if (retryTimer) clearTimeout(retryTimer);
     server.close(() => {
       void Promise.all([
         materializer.dispose(),
