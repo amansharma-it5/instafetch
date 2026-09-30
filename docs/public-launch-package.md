@@ -302,7 +302,7 @@ Use only media created by the maker, public-domain media, or synthetic test fixt
 
 ## I. Feedback readiness
 
-The Contact route now links to structured bug and feature templates without adding a feedback SaaS, chat widget, or user database. The repository is private, so grant issue access to invited testers or provide another approved contact channel before sharing the link broadly.
+The Contact route now offers public mailto links to `instafetch.support@gmail.com` with pre-filled bug and feature checklists. Structured GitHub templates remain available for invited testers and collaborators; the repository stays private. No feedback SaaS, chat widget, or user database is added.
 
 Suggested privacy-safe prompts:
 

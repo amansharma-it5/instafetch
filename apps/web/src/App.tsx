@@ -69,6 +69,25 @@ const RETRYABLE_RESOLVE_ERRORS = new Set([
   "SERVER_BUSY",
   "UPSTREAM_TIMEOUT",
 ]);
+const SUPPORT_EMAIL = "instafetch.support@gmail.com";
+const FEEDBACK_BODY = [
+  "Platform: Instagram / YouTube",
+  "Link type: Reel / Video / Short / Other",
+  "Browser:",
+  "Device:",
+  "What happened:",
+  "What was expected:",
+  "Visible error message:",
+  "Did preview work?",
+  "Did download work?",
+  "",
+  "Do not send passwords, cookies, authentication tokens, private media links, or other sensitive information.",
+].join("\n");
+
+function feedbackMailto(subject: string): string {
+  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(FEEDBACK_BODY)}`;
+}
+
 type DownloaderState =
   | { status: "empty" | "ready" }
   | { status: "processing"; slow: boolean }
@@ -1039,6 +1058,7 @@ function Footer() {
             <Link to="/terms">{t("footer.terms")}</Link>
             <Link to="/disclaimer">{t("footer.disclaimer")}</Link>
             <Link to="/contact">{t("footer.contact")}</Link>
+            <Link to="/contact#feedback">{t("footer.feedback")}</Link>
           </div>
         </div>
       </div>
@@ -1120,7 +1140,7 @@ function LegalPage({
               sections: [
                 [
                   "Product feedback",
-                  "For this early release, please open an issue in the project repository with the route type, approximate time, and the safe error message you saw. Do not include passwords, cookies, or signed provider URLs.",
+                  "Use the public email links below to report a bug or request a feature. Invited testers and collaborators can use the structured GitHub forms. Include the route type, approximate time, and safe error message you saw. Do not include passwords, cookies, authentication tokens, private media links, or signed provider URLs.",
                 ],
                 [
                   "Responsible reports",
@@ -1152,9 +1172,26 @@ function LegalPage({
             <section className="feedback-panel" id="feedback">
               <h2>{t("feedback.prompt")}</h2>
               <p>{t("feedback.helper")}</p>
+              <p className="feedback-warning">{t("feedback.privacyWarning")}</p>
               <div className="feedback-actions">
                 <a
                   className="primary-button"
+                  href={feedbackMailto("InstaFetch Bug Report")}
+                >
+                  {t("feedback.emailBug")}
+                </a>
+                <a
+                  className="secondary-button"
+                  href={feedbackMailto("InstaFetch Feature Request")}
+                >
+                  {t("feedback.emailFeature")}
+                </a>
+              </div>
+              <p className="feedback-email">{SUPPORT_EMAIL}</p>
+              <p className="feedback-collaborator-label">{t("feedback.collaboratorLabel")}</p>
+              <div className="feedback-actions feedback-actions--collaborators">
+                <a
+                  className="secondary-button"
                   href="https://github.com/amansharma-it5/instafetch/issues/new?template=bug-report.yml"
                   rel="noreferrer"
                   target="_blank"

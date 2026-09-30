@@ -11,7 +11,7 @@ This is an internal, unpublished launch checklist for the first 100 genuine sess
 
 ## Feedback path
 
-The site links to `/contact#feedback`, where collaborators can open the structured GitHub bug or feature template. Reports must not include passwords, cookies, private links, signed preview/download URLs, tokens, captions, or personal information. The repository is private, so the owner must grant issue access or provide another approved contact channel before inviting people without repository access.
+The site links to `/contact#feedback`, where public visitors can email `instafetch.support@gmail.com` using pre-filled bug-report or feature-request checklists. Invited testers and collaborators can open the structured GitHub forms. Reports must not include passwords, cookies, authentication tokens, private links, signed preview/download URLs, tokens, captions, or personal information.
 
 ## Five tester questions
 
