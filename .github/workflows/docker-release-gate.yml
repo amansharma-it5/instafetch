@@ -36,6 +36,16 @@ jobs:
           --env DOWNLOAD_TOKEN_SECRET=ci-only-release-gate-secret-0123456789abcdef
           instafetch-release-gate:ci
 
+      - name: Verify image command and bundled provider files
+        shell: bash
+        run: |
+          set -euo pipefail
+          command_json="$(docker image inspect instafetch-release-gate:ci --format '{{json .Config.Cmd}}')"
+          test "$command_json" = '["node","apps/api/dist/server.js"]'
+          docker run --rm --entrypoint node instafetch-release-gate:ci -e "const fs=require('node:fs'); for (const path of ['/opt/bgutil/server/build/main.js','/usr/local/bin/yt-dlp','/usr/bin/ffmpeg','/usr/bin/ffprobe']) { if (!fs.existsSync(path)) throw new Error('missing runtime file: '+path); if (!fs.statSync(path).isFile()) throw new Error('runtime path is not a file: '+path); } console.log('runtime files present');"
+          test "$(docker run --rm --entrypoint id instafetch-release-gate:ci -u)" = '1000'
+          docker run --rm --entrypoint python3 instafetch-release-gate:ci -c "from importlib.metadata import version; assert version('bgutil-ytdlp-pot-provider') == '2.0.0'; print('bgutil plugin: '+version('bgutil-ytdlp-pot-provider'))"
+
       - name: Wait for readiness
         shell: bash
         run: |

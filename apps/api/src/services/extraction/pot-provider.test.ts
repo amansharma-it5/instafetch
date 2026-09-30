@@ -78,4 +78,44 @@ describe('PotProviderSupervisor', () => {
     expect(supervisor.isAvailable()).toBe(true);
     expect(spawnImpl).not.toHaveBeenCalled();
   });
+
+  it('emits only sanitized lifecycle diagnostics when the provider becomes ready', async () => {
+    const child = fakeChild();
+    const diagnostics: string[] = [];
+    const supervisor = new PotProviderSupervisor({
+      enabled: true,
+      spawnImpl: vi.fn(() => child) as never,
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({ version: '2.0.0' }), { status: 200 })),
+      onDiagnostic: (diagnostic) => diagnostics.push(JSON.stringify(diagnostic)),
+      startupTimeoutMs: 100,
+      pingTimeoutMs: 10,
+    });
+
+    await supervisor.start();
+
+    expect(diagnostics.some((entry) => entry.includes('pot_provider_launch_attempt'))).toBe(true);
+    expect(diagnostics.some((entry) => entry.includes('POT_PROVIDER_READY'))).toBe(true);
+    expect(diagnostics.join('\n')).not.toMatch(/token|url|path|cookie|secret/i);
+    await supervisor.stop();
+  });
+
+  it('classifies a bounded readiness timeout without exposing command details', async () => {
+    const child = fakeChild();
+    const diagnostics: Array<Record<string, unknown>> = [];
+    const supervisor = new PotProviderSupervisor({
+      enabled: true,
+      spawnImpl: vi.fn(() => child) as never,
+      fetchImpl: vi.fn(async () => new Response('{}', { status: 503 })),
+      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+      startupTimeoutMs: 10,
+      pingTimeoutMs: 5,
+    });
+
+    await expect(supervisor.start()).rejects.toThrow('PO token provider did not become ready');
+
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      event: 'pot_provider_ping_timeout',
+      category: 'POT_PING_TIMEOUT',
+    }));
+  });
 });

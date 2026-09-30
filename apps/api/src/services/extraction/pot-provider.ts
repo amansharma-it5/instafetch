@@ -9,6 +9,22 @@ export interface PotProviderHealth {
   baseUrl?: string;
 }
 
+export type PotProviderDiagnosticEvent =
+  | 'pot_provider_launch_attempt'
+  | 'pot_provider_process_started'
+  | 'pot_provider_process_exit'
+  | 'pot_provider_ping_ok'
+  | 'pot_provider_ping_timeout'
+  | 'pot_provider_restart_attempt';
+
+export type PotProviderDiagnostic = {
+  event: PotProviderDiagnosticEvent;
+  category?: 'POT_NODE_UNAVAILABLE' | 'POT_SPAWN_FAILED' | 'POT_PROCESS_EXITED' | 'POT_PORT_CONFLICT' | 'POT_PING_TIMEOUT' | 'POT_PROVIDER_READY';
+  elapsedMs?: number;
+  exitCode?: number | null;
+  signal?: NodeJS.Signals | null;
+};
+
 export interface PotProviderSupervisorOptions {
   enabled?: boolean;
   nodeExecutable?: string;
@@ -19,6 +35,7 @@ export interface PotProviderSupervisorOptions {
   pingTimeoutMs?: number;
   fetchImpl?: typeof fetch;
   spawnImpl?: typeof spawn;
+  onDiagnostic?: (diagnostic: PotProviderDiagnostic) => void;
 }
 
 function configuredPort(value: string | undefined): number {
@@ -40,6 +57,7 @@ export class PotProviderSupervisor implements PotProviderHealth {
   private readonly pingTimeoutMs: number;
   private readonly fetchImpl: typeof fetch;
   private readonly spawnImpl: typeof spawn;
+  private readonly onDiagnostic: (diagnostic: PotProviderDiagnostic) => void;
   private child?: ChildProcess;
   private available = false;
 
@@ -53,6 +71,7 @@ export class PotProviderSupervisor implements PotProviderHealth {
     this.pingTimeoutMs = options.pingTimeoutMs ?? DEFAULT_PING_TIMEOUT_MS;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.spawnImpl = options.spawnImpl ?? spawn;
+    this.onDiagnostic = options.onDiagnostic ?? (() => undefined);
     if (!Number.isInteger(this.port) || this.port < 1 || this.port > 65_535) {
       throw new Error('POT_PROVIDER_PORT must be a valid TCP port');
     }
@@ -70,7 +89,10 @@ export class PotProviderSupervisor implements PotProviderHealth {
     if (!this.enabled || this.available) return;
     if (this.child) throw new Error('PO token provider startup is already in progress');
 
+    const startedAt = Date.now();
+    this.emit({ event: 'pot_provider_launch_attempt' });
     let child: ChildProcess;
+    let processFailed = false;
     try {
       const spawnOptions: SpawnOptions = {
         shell: false,
@@ -78,31 +100,62 @@ export class PotProviderSupervisor implements PotProviderHealth {
         stdio: ['ignore', 'ignore', 'ignore'],
       };
       child = this.spawnImpl(this.nodeExecutable, [this.entrypoint, '--host', this.host, '--port', String(this.port)], spawnOptions);
-    } catch {
+    } catch (error) {
+      this.emit({ event: 'pot_provider_process_exit', category: this.categoryForError(error) });
       throw new Error('PO token provider could not be started');
     }
     this.child = child;
+    this.emit({ event: 'pot_provider_process_started' });
     child.once('exit', () => {
       this.available = false;
       this.child = undefined;
+      this.emit({
+        event: 'pot_provider_process_exit',
+        category: 'POT_PROCESS_EXITED',
+        elapsedMs: Date.now() - startedAt,
+        exitCode: child.exitCode,
+        signal: child.signalCode,
+      });
     });
-    child.once('error', () => {
+    child.once('error', (error) => {
       this.available = false;
       this.child = undefined;
+      processFailed = true;
+      this.emit({ event: 'pot_provider_process_exit', category: this.categoryForError(error), elapsedMs: Date.now() - startedAt });
     });
 
     const deadline = Date.now() + this.startupTimeoutMs;
     while (Date.now() < deadline) {
-      if (child.exitCode !== null || child.signalCode !== null) break;
+      if (processFailed || child.exitCode !== null || child.signalCode !== null) break;
       if (await this.ping()) {
         this.available = true;
+        this.emit({ event: 'pot_provider_ping_ok', category: 'POT_PROVIDER_READY', elapsedMs: Date.now() - startedAt });
         return;
       }
       await sleep(100);
     }
 
+    const timedOut = !processFailed && child.exitCode === null && child.signalCode === null;
+    if (timedOut) {
+      this.emit({ event: 'pot_provider_ping_timeout', category: 'POT_PING_TIMEOUT', elapsedMs: Date.now() - startedAt });
+    }
     await this.stop();
     throw new Error('PO token provider did not become ready');
+  }
+
+  private emit(diagnostic: PotProviderDiagnostic): void {
+    try {
+      this.onDiagnostic(diagnostic);
+    } catch {
+      // Diagnostics must never affect provider availability or API startup.
+    }
+  }
+
+  private categoryForError(error: unknown): PotProviderDiagnostic['category'] {
+    const code = error && typeof error === 'object' && 'code' in error ? String((error as { code?: unknown }).code) : '';
+    if (code === 'ENOENT') return 'POT_NODE_UNAVAILABLE';
+    if (code === 'EADDRINUSE') return 'POT_PORT_CONFLICT';
+    return 'POT_SPAWN_FAILED';
   }
 
   async stop(): Promise<void> {
