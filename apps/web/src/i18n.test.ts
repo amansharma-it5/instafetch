@@ -56,7 +56,14 @@ describe("locale messages", () => {
     for (const locale of ["en", "es", "fr"] as const) {
       expect(translate(locale, "feedback.prompt")).toBeTruthy();
       expect(translate(locale, "feedback.helper")).toBeTruthy();
+      expect(translate(locale, "feedback.emailBug")).toBeTruthy();
+      expect(translate(locale, "feedback.emailFeature")).toBeTruthy();
+      expect(translate(locale, "feedback.privacyWarning")).toBeTruthy();
+      expect(translate(locale, "feedback.collaboratorLabel")).toBeTruthy();
       expect(translate(locale, "feedback.accessNote")).toBeTruthy();
     }
+    expect(translate("en", "feedback.privacyWarning")).toBe(
+      "Do not send passwords, cookies, authentication tokens, private media links, or other sensitive information.",
+    );
   });
 });

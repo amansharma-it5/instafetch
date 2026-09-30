@@ -50,10 +50,15 @@ const messages: Record<Locale, Record<string, string>> = {
     "feedback.prompt": "Found a problem? Send feedback",
     "feedback.helper":
       "Share the platform, link type, browser or device, safe error message, and whether preview or download worked. Never include passwords, cookies, private links, tokens, or personal information.",
-    "feedback.openBug": "Open a bug report",
-    "feedback.openFeature": "Suggest an improvement",
+    "feedback.emailBug": "Email a bug report",
+    "feedback.emailFeature": "Email a feature request",
+    "feedback.openBug": "Open GitHub bug form",
+    "feedback.openFeature": "Open GitHub feature form",
+    "feedback.collaboratorLabel": "For invited testers/collaborators",
+    "feedback.privacyWarning":
+      "Do not send passwords, cookies, authentication tokens, private media links, or other sensitive information.",
     "feedback.accessNote":
-      "GitHub access may be required to submit a report. If you cannot open it, share the same safe details with the person who invited you.",
+      "Use the email links above for public support. GitHub forms are for invited testers and collaborators.",
     "status.processing":
       "Checking the public post and preparing available media…",
     "status.waking":
@@ -194,6 +199,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "footer.terms": "Terms",
     "footer.disclaimer": "Disclaimer",
     "footer.contact": "Contact",
+    "footer.feedback": "Send feedback",
     "footer.publicNotice": "For publicly accessible Instagram and YouTube content only.",
     "legal.privacy.title": "Privacy at InstaFetch",
     "legal.privacy.intro":
@@ -311,10 +317,15 @@ const messages: Record<Locale, Record<string, string>> = {
     "feedback.prompt": "¿Encontraste un problema? Envía comentarios",
     "feedback.helper":
       "Comparte la plataforma, el tipo de enlace, el navegador o dispositivo, el mensaje de error seguro y si funcionaron la vista previa o la descarga. Nunca incluyas contraseñas, cookies, enlaces privados, tokens ni información personal.",
-    "feedback.openBug": "Abrir un informe de error",
-    "feedback.openFeature": "Sugerir una mejora",
+    "feedback.emailBug": "Enviar un informe de error por correo",
+    "feedback.emailFeature": "Enviar una solicitud de mejora por correo",
+    "feedback.openBug": "Abrir formulario de error de GitHub",
+    "feedback.openFeature": "Abrir formulario de mejora de GitHub",
+    "feedback.collaboratorLabel": "Para testers/colaboradores invitados",
+    "feedback.privacyWarning":
+      "No envíes contraseñas, cookies, tokens de autenticación, enlaces privados de medios ni otra información sensible.",
     "feedback.accessNote":
-      "Puede que necesites acceso a GitHub para enviar un informe. Si no puedes abrirlo, comparte los mismos datos seguros con la persona que te invitó.",
+      "Usa los enlaces de correo para recibir soporte público. Los formularios de GitHub son para testers y colaboradores invitados.",
     "input.download": "Descargar",
     "status.processing":
       "Comprobando la publicación pública y preparando los medios disponibles…",
@@ -459,6 +470,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "footer.terms": "Términos",
     "footer.disclaimer": "Aviso",
     "footer.contact": "Contacto",
+    "footer.feedback": "Enviar comentarios",
     "footer.publicNotice": "Solo para contenido público de Instagram y YouTube.",
     "legal.privacy.title": "Privacidad en InstaFetch",
     "legal.privacy.intro":
@@ -555,10 +567,15 @@ const messages: Record<Locale, Record<string, string>> = {
     "feedback.prompt": "Un problème ? Envoyez vos commentaires",
     "feedback.helper":
       "Indiquez la plateforme, le type de lien, le navigateur ou l’appareil, le message d’erreur non sensible et si l’aperçu ou le téléchargement a fonctionné. N’incluez jamais de mots de passe, cookies, liens privés, jetons ni informations personnelles.",
-    "feedback.openBug": "Ouvrir un rapport de bug",
-    "feedback.openFeature": "Suggérer une amélioration",
+    "feedback.emailBug": "Envoyer un rapport de bug par e-mail",
+    "feedback.emailFeature": "Envoyer une demande de fonctionnalité par e-mail",
+    "feedback.openBug": "Ouvrir le formulaire de bug GitHub",
+    "feedback.openFeature": "Ouvrir le formulaire de fonctionnalité GitHub",
+    "feedback.collaboratorLabel": "Pour les testeurs/collaborateurs invités",
+    "feedback.privacyWarning":
+      "N’envoyez pas de mots de passe, cookies, jetons d’authentification, liens privés de médias ni autres informations sensibles.",
     "feedback.accessNote":
-      "Un accès GitHub peut être nécessaire pour envoyer un rapport. Si vous ne pouvez pas l’ouvrir, partagez les mêmes informations sûres avec la personne qui vous a invité.",
+      "Utilisez les liens e-mail pour le support public. Les formulaires GitHub sont réservés aux testeurs et collaborateurs invités.",
     "input.download": "Télécharger",
     "status.processing":
       "Vérification de la publication publique et préparation des médias disponibles…",
@@ -703,6 +720,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "footer.terms": "Conditions",
     "footer.disclaimer": "Avertissement",
     "footer.contact": "Contact",
+    "footer.feedback": "Envoyer un commentaire",
     "footer.publicNotice": "Pour les contenus Instagram et YouTube publics uniquement.",
     "legal.privacy.title": "Confidentialité chez InstaFetch",
     "legal.privacy.intro":

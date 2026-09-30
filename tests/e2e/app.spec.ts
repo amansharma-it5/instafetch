@@ -250,16 +250,25 @@ test('renders the static legal and support pages', async ({ page }) => {
   }
 });
 
-test('exposes a privacy-safe feedback path and structured report links', async ({ page }) => {
+test('exposes a public email feedback path and collaborator report links', async ({ page }) => {
   await page.goto('/');
   const feedback = page.getByRole('link', { name: 'Found a problem? Send feedback' });
   await expect(feedback).toHaveAttribute('href', '/contact#feedback');
   await feedback.click();
   await expect(page).toHaveURL(/\/contact#feedback$/);
   await expect(page.getByRole('heading', { name: 'Found a problem? Send feedback' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Open a bug report' })).toHaveAttribute('href', /issues\/new\?template=bug-report\.yml$/);
-  await expect(page.getByRole('link', { name: 'Suggest an improvement' })).toHaveAttribute('href', /issues\/new\?template=feature-request\.yml$/);
-  await expect(page.getByText(/Never include passwords, cookies, private links, tokens/i)).toBeVisible();
+  const bugEmail = page.getByRole('link', { name: 'Email a bug report' });
+  const featureEmail = page.getByRole('link', { name: 'Email a feature request' });
+  await expect(bugEmail).toHaveAttribute('href', /mailto:instafetch\.support@gmail\.com\?subject=InstaFetch%20Bug%20Report&body=/);
+  await expect(featureEmail).toHaveAttribute('href', /mailto:instafetch\.support@gmail\.com\?subject=InstaFetch%20Feature%20Request&body=/);
+  await expect(bugEmail).toHaveAttribute('href', /Platform%3A%20Instagram%20%2F%20YouTube/);
+  await expect(bugEmail).toHaveAttribute('href', /Browser%3A/);
+  await expect(bugEmail).toHaveAttribute('href', /Did%20download%20work%3F/);
+  await expect(bugEmail).toHaveAttribute('href', /Do%20not%20send%20passwords%2C%20cookies%2C%20authentication%20tokens/);
+  await expect(page.getByText('Do not send passwords, cookies, authentication tokens, private media links, or other sensitive information.', { exact: true })).toBeVisible();
+  await expect(page.getByText('For invited testers/collaborators', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open GitHub bug form' })).toHaveAttribute('href', /issues\/new\?template=bug-report\.yml$/);
+  await expect(page.getByRole('link', { name: 'Open GitHub feature form' })).toHaveAttribute('href', /issues\/new\?template=feature-request\.yml$/);
 });
 
 test('maps anonymous availability errors to capability-aware copy', async ({ page }) => {
