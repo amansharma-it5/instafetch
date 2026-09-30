@@ -50,6 +50,16 @@ describe('health endpoints', () => {
     });
   });
 
+  it('does not report readiness when the YouTube provider is unavailable', async () => {
+    const response = await request(createApp({ provider, youtubeProvider: { isAvailable: () => false, resolve: async () => ({}) } })).get('/health/ready');
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      status: 'not_ready',
+      providers: { instagram: true, youtube: false, ffmpeg: true, ffprobe: true, potProvider: true },
+    });
+  });
+
   it('returns a safe JSON response for unknown routes without allowing caching', async () => {
     const response = await request(createApp({ provider })).get('/api/unknown-route');
 

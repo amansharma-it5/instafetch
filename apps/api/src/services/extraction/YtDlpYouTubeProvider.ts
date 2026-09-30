@@ -30,6 +30,13 @@ export class YtDlpYouTubeProvider implements YouTubeExtractionProvider {
     return ytDlpAvailable && (!this.options.requirePotProvider || Boolean(this.options.potProvider?.isAvailable()));
   }
 
+  availabilityErrorCode(): 'TOKEN_PROVIDER_UNAVAILABLE' | null {
+    if (this.options.runMetadata || !this.options.requirePotProvider || !isYtDlpAvailable(this.options.executable)) {
+      return null;
+    }
+    return this.options.potProvider?.isAvailable() === true ? null : 'TOKEN_PROVIDER_UNAVAILABLE';
+  }
+
   async resolve(url: ValidatedYouTubeUrl): Promise<Record<string, unknown>> {
     const runner = this.options.runMetadata ?? runYtDlpMetadata;
     const startedAt = Date.now();

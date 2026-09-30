@@ -122,7 +122,7 @@ There is no Wrangler configuration or Workers deployment script in this reposito
 
 The API keeps expensive public-media work bounded for the free hosting footprint:
 
-- yt-dlp/gallery-dl extraction, upstream fetches, FFmpeg, and ffprobe each have a 30-second process/request timeout. YouTube resolution has a bounded 45-second total budget across the default, `mweb`+PO-token, and `android_vr` attempts. The browser resolve request has a 120-second client timeout.
+- yt-dlp/gallery-dl extraction and ordinary media processing use bounded 30-second process/request timeouts. YouTube resolution has a bounded 45-second total budget across the default, `mweb`+PO-token, and `android_vr` attempts; YouTube media transfers have a 90-second per-stream budget and YouTube FFmpeg/ffprobe work has a separate 60-second budget. The browser resolve request has a 120-second client timeout.
 - A single source or materialized output is limited to 100 MB. The in-memory temporary media cache is limited to 500 MB and 50 files per resolution.
 - Resolution records, media files, and HMAC preview/download tokens expire after 5 minutes. Resolution storage is capped at 100 jobs and 100 items per job. Upstream redirects are limited to three hops.
 - At most two independent media materialization operations (including FFmpeg work) run at once. There is no queue; additional requests receive `SERVER_BUSY` and can be retried shortly.

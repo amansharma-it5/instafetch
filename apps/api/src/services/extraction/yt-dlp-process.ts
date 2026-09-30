@@ -172,7 +172,30 @@ export function isFfprobeAvailable(configuredPath = process.env.FFPROBE_PATH?.tr
   return isToolAvailable('ffprobe', configuredPath);
 }
 
-export function buildYtDlpArgs(canonicalUrl: string, options: Pick<YtDlpProcessOptions, 'youtubePlayerClient'> = {}): string[] {
+function assertLoopbackPotProviderUrl(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('YouTube PO token provider URL is invalid');
+  }
+  const port = Number.parseInt(parsed.port || '80', 10);
+  if (parsed.protocol !== 'http:'
+    || parsed.hostname !== '127.0.0.1'
+    || !Number.isInteger(port)
+    || port < 1
+    || port > 65_535
+    || parsed.username
+    || parsed.password
+    || parsed.pathname !== '/'
+    || parsed.search
+    || parsed.hash) {
+    throw new Error('YouTube PO token provider URL must use the fixed loopback endpoint');
+  }
+  return parsed.origin;
+}
+
+export function buildYtDlpArgs(canonicalUrl: string, options: Pick<YtDlpProcessOptions, 'youtubePlayerClient' | 'youtubePotProviderUrl'> = {}): string[] {
   const args = [
     '--ignore-config',
     '--dump-single-json',
@@ -185,17 +208,10 @@ export function buildYtDlpArgs(canonicalUrl: string, options: Pick<YtDlpProcessO
   if (options.youtubePlayerClient) {
     args.push('--extractor-args', `youtube:player_client=${options.youtubePlayerClient}`);
   }
-  args.push('--', canonicalUrl);
-  return args;
-}
-
-function buildYtDlpProcessArgs(canonicalUrl: string, options: YtDlpProcessOptions): string[] {
-  const args = buildYtDlpArgs(canonicalUrl, options);
-  if (options.youtubePotProviderUrl && options.youtubePlayerClient === 'mweb') {
-    const separator = args.indexOf('--');
-    const providerArgs = ['--extractor-args', `youtubepot-bgutilhttp:base_url=${options.youtubePotProviderUrl}`];
-    args.splice(separator, 0, ...providerArgs);
+  if (options.youtubePotProviderUrl) {
+    args.push('--extractor-args', `youtubepot-bgutilhttp:base_url=${assertLoopbackPotProviderUrl(options.youtubePotProviderUrl)}`);
   }
+  args.push('--', canonicalUrl);
   return args;
 }
 
@@ -213,7 +229,7 @@ function spawnYtDlp(canonicalUrl: string, options: YtDlpProcessOptions): Promise
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
       };
-      child = spawnImpl(executable, buildYtDlpProcessArgs(canonicalUrl, options), spawnOptions);
+      child = spawnImpl(executable, buildYtDlpArgs(canonicalUrl, options), spawnOptions);
     } catch {
       rejectOutput(new YtDlpProcessError('unavailable', 'yt-dlp could not be started'));
       return;

@@ -243,7 +243,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "error.PROVIDER_UNAVAILABLE":
       "The media service is waking up or temporarily unavailable. Please try again shortly.",
     "error.TOKEN_PROVIDER_UNAVAILABLE":
-      "YouTube’s anonymous token service is temporarily unavailable. Please try again shortly.",
+      "YouTube anonymous access is temporarily unavailable. Please try again shortly.",
     "error.PROVIDER_CHALLENGE":
       "YouTube did not expose this video to the anonymous service. Try another public video.",
     "error.PROVIDER_MALFORMED_RESPONSE":

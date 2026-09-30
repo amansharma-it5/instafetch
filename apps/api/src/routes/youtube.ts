@@ -74,7 +74,10 @@ export function createYouTubeRouter({ provider, store, tokenService }: YouTubeRo
       if (error instanceof YouTubeUrlError && error.code === 'PLAYLIST_NOT_SUPPORTED') throw new ApiError('PLAYLIST_NOT_SUPPORTED', message('PLAYLIST_NOT_SUPPORTED'), 422);
       throw new ApiError('INVALID_YOUTUBE_URL', message('INVALID_YOUTUBE_URL'), 400);
     }
-    if (!provider.isAvailable()) throw new ApiError('PROVIDER_UNAVAILABLE', message('PROVIDER_UNAVAILABLE'), 503);
+    if (!provider.isAvailable()) {
+      const code = provider.availabilityErrorCode?.() ?? 'PROVIDER_UNAVAILABLE';
+      throw new ApiError(code, message(code), 503);
+    }
     let metadata: Record<string, unknown>;
     try { metadata = await provider.resolve(validated); } catch (error) { throw providerError(error); }
     let normalized;

@@ -59,6 +59,10 @@ export interface MediaMaterializerOptions {
   timeoutMs?: number;
   /** Maximum wall-clock time for each upstream media stream. */
   downloadTimeoutMs?: number;
+  /** Longer bounded transfer budget for YouTube googlevideo streams. */
+  youtubeTimeoutMs?: number;
+  /** Separate bounded budget for YouTube FFmpeg and ffprobe work. */
+  processTimeoutMs?: number;
   maxFileBytes?: number;
   maxTotalBytes?: number;
   maxFilesPerResolution?: number;
@@ -82,7 +86,9 @@ interface CachedMedia extends MaterializedMedia {
 const DEFAULT_MAX_FILE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_BYTES = 500 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_DOWNLOAD_TIMEOUT_MS = 90_000;
+const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
+const DEFAULT_YOUTUBE_TIMEOUT_MS = 90_000;
+const DEFAULT_PROCESS_TIMEOUT_MS = 60_000;
 const DEFAULT_TTL_MS = 5 * 60_000;
 const DEFAULT_MAX_REDIRECTS = 3;
 const DEFAULT_MAX_CONCURRENT = 2;
@@ -260,6 +266,8 @@ export class MediaMaterializer {
   private readonly ttlMs: number;
   private readonly timeoutMs: number;
   private readonly downloadTimeoutMs: number;
+  private readonly youtubeTimeoutMs: number;
+  private readonly processTimeoutMs: number;
   private readonly maxFileBytes: number;
   private readonly maxTotalBytes: number;
   private readonly maxFilesPerResolution: number;
@@ -284,6 +292,12 @@ export class MediaMaterializer {
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.downloadTimeoutMs = options.downloadTimeoutMs ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
+    this.youtubeTimeoutMs = options.youtubeTimeoutMs ?? DEFAULT_YOUTUBE_TIMEOUT_MS;
+    this.processTimeoutMs = options.processTimeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS;
+    if (![this.timeoutMs, this.downloadTimeoutMs, this.youtubeTimeoutMs, this.processTimeoutMs]
+      .every((value) => Number.isInteger(value) && value > 0)) {
+      throw new Error('materialization timeouts must be positive integers');
+    }
     this.maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
     this.maxTotalBytes = options.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES;
     this.maxFilesPerResolution = options.maxFilesPerResolution ?? 50;
@@ -315,11 +329,11 @@ export class MediaMaterializer {
     return parsed;
   }
 
-  private async requestFollowingRedirects(sourceUrl: string): Promise<UpstreamResponse> {
+  private async requestFollowingRedirects(sourceUrl: string, timeoutMs: number): Promise<UpstreamResponse> {
     let current = sourceUrl;
     for (let redirect = 0; redirect <= this.maxRedirects; redirect += 1) {
       const parsed = this.assertSourceUrl(current);
-      const response = await this.requestUpstream(parsed.toString(), this.downloadTimeoutMs);
+      const response = await this.requestUpstream(parsed.toString(), timeoutMs);
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         if (redirect === this.maxRedirects) {
           response.body.resume();
@@ -338,9 +352,10 @@ export class MediaMaterializer {
     sourceUrl: string,
     targetPath: string,
     expected: 'video' | 'audio' | 'image',
+    timeoutMs: number,
   ): Promise<{ bytes: number; kind: 'video' | 'webm' | 'jpeg' | 'png' | 'webp' | 'gif' | 'avif' | null }> {
     const source = this.assertSourceUrl(sourceUrl);
-    const response = await this.requestFollowingRedirects(source.toString());
+    const response = await this.requestFollowingRedirects(source.toString(), timeoutMs);
     if (response.statusCode === 404 || response.statusCode === 410) {
       response.body.resume();
       throw new MediaMaterializationError('MEDIA_UNAVAILABLE', 'The upstream media is unavailable');
@@ -360,7 +375,7 @@ export class MediaMaterializer {
     const body = response.body as NodeJS.ReadableStream & { destroy?: (error?: Error) => void };
     const timeout = setTimeout(() => {
       body.destroy?.(new MediaMaterializationError('UPSTREAM_TIMEOUT', 'The upstream media request timed out'));
-    }, this.downloadTimeoutMs);
+    }, timeoutMs);
     try {
       await pipeline(body, capture, createWriteStream(targetPath, { flags: 'wx' }));
       const kind = detectKind(capture.header);
@@ -391,10 +406,10 @@ export class MediaMaterializer {
     return new MediaMaterializationError('DOWNLOAD_FAILED', 'The media could not be materialized');
   }
 
-  private async muxVideoAudio(videoPath: string, audioPath: string, outputPath: string): Promise<void> {
+  private async muxVideoAudio(videoPath: string, audioPath: string, outputPath: string, timeoutMs: number): Promise<void> {
     const processOptions: MediaProcessOptions = {
       executable: this.ffmpegExecutable,
-      timeoutMs: this.timeoutMs,
+      timeoutMs,
       maxOutputBytes: 128 * 1024,
     };
     try {
@@ -420,20 +435,22 @@ export class MediaMaterializer {
     const audioPath = `${stem}.audio`;
     const outputPart = `${stem}.mp4.part`;
     const outputPath = `${stem}.mp4`;
+    const transferTimeout = this.mediaTimeout(item);
+    const processTimeout = this.processTimeout(item);
     this.temporaryPaths.add(outputPart);
     this.temporaryPaths.add(outputPath);
     try {
-      const video = await this.downloadToPath(item.providerUrl, videoPath, 'video');
-      const audio = await this.downloadToPath(item.audioProviderUrl!, audioPath, 'audio');
+      const video = await this.downloadToPath(item.providerUrl, videoPath, 'video', transferTimeout);
+      const audio = await this.downloadToPath(item.audioProviderUrl!, audioPath, 'audio', transferTimeout);
       if (video.bytes + audio.bytes > this.maxTotalBytes) {
         throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The temporary media cache is full');
       }
-      await this.muxVideoAudio(videoPath, audioPath, outputPart);
+      await this.muxVideoAudio(videoPath, audioPath, outputPart, processTimeout);
       let streams: ProbedMediaStreams;
       try {
         streams = await this.probeMedia(outputPart, {
           executable: this.ffprobeExecutable,
-          timeoutMs: this.timeoutMs,
+          timeoutMs: processTimeout,
           maxOutputBytes: 128 * 1024,
         });
       } catch (error) {
@@ -489,8 +506,10 @@ export class MediaMaterializer {
     const stem = join(this.rootDir, `media-${resolutionId}-${item.id}-${Date.now()}`);
     const tempPath = `${stem}.part`;
     const outputPath = stem;
+    const transferTimeout = this.mediaTimeout(item);
+    const processTimeout = this.processTimeout(item);
     try {
-      const downloaded = await this.downloadToPath(item.providerUrl, tempPath, item.type === 'video' ? 'video' : 'image');
+      const downloaded = await this.downloadToPath(item.providerUrl, tempPath, item.type === 'video' ? 'video' : 'image', transferTimeout);
       if (!downloaded.kind) {
         throw new MediaMaterializationError('MEDIA_TOO_LARGE', 'The temporary media cache is full');
       }
@@ -499,7 +518,7 @@ export class MediaMaterializer {
         try {
           streams = await this.probeMedia(tempPath, {
             executable: this.ffprobeExecutable,
-            timeoutMs: this.timeoutMs,
+            timeoutMs: processTimeout,
             maxOutputBytes: 128 * 1024,
           });
         } catch (error) {
@@ -539,6 +558,14 @@ export class MediaMaterializer {
         ? error
         : new MediaMaterializationError('DOWNLOAD_FAILED', 'The media could not be materialized');
     }
+  }
+
+  private mediaTimeout(item: InternalMediaItem): number {
+    return item.platform === 'youtube' ? this.youtubeTimeoutMs : this.downloadTimeoutMs;
+  }
+
+  private processTimeout(item: InternalMediaItem): number {
+    return item.platform === 'youtube' ? this.processTimeoutMs : this.timeoutMs;
   }
 
   private async materializeFresh(resolutionId: string, item: InternalMediaItem, expiresAt: number): Promise<MaterializedMedia> {
