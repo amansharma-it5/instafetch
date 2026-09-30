@@ -19,6 +19,7 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -46,7 +47,7 @@ jobs:
         run: npm run build
 
       - name: Install Playwright browser engines
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: npx playwright install chromium firefox webkit
 
       - name: Run end-to-end tests
         run: npm run e2e
