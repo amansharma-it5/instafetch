@@ -1,0 +1,75 @@
+name: Bug report
+description: Report a reproducible problem without sharing private media or credentials.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not include passwords, cookies, private links, signed preview/download URLs, tokens, captions, or personal information.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Instagram
+        - YouTube
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: url_type
+    attributes:
+      label: Link type
+      options:
+        - Reel
+        - Video
+        - Short
+        - Photo
+        - Carousel
+        - Story
+        - TV
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: browser_device
+    attributes:
+      label: Browser and device
+      placeholder: Chrome on Android, Safari on iPhone, Edge on Windows
+    validations:
+      required: true
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: Include the safe error message or code if one was shown.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: dropdown
+    id: preview
+    attributes:
+      label: Did preview work?
+      options:
+        - Yes
+        - No
+        - Not applicable
+    validations:
+      required: true
+  - type: dropdown
+    id: download
+    attributes:
+      label: Did download work?
+      options:
+        - Yes
+        - No
+        - Not applicable
+    validations:
+      required: true

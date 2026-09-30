@@ -389,6 +389,10 @@ function DownloaderPanel({
         <ShieldCheck aria-hidden="true" size={16} />
         {t("panel.footnote")}
       </div>
+      <Link className="feedback-link" to="/contact#feedback">
+        {t("feedback.prompt")}
+        <ArrowRight aria-hidden="true" size={15} />
+      </Link>
     </div>
   );
 }
@@ -1144,6 +1148,31 @@ function LegalPage({
               <p>{text}</p>
             </section>
           ))}
+          {kind === "contact" && (
+            <section className="feedback-panel" id="feedback">
+              <h2>{t("feedback.prompt")}</h2>
+              <p>{t("feedback.helper")}</p>
+              <div className="feedback-actions">
+                <a
+                  className="primary-button"
+                  href="https://github.com/amansharma-it5/instafetch/issues/new?template=bug-report.yml"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {t("feedback.openBug")}
+                </a>
+                <a
+                  className="secondary-button"
+                  href="https://github.com/amansharma-it5/instafetch/issues/new?template=feature-request.yml"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {t("feedback.openFeature")}
+                </a>
+              </div>
+              <p className="feedback-access-note">{t("feedback.accessNote")}</p>
+            </section>
+          )}
         </div>
       </main>
       <Footer />
