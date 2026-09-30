@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 
 const DEFAULT_PORT = 4416;
-const DEFAULT_STARTUP_TIMEOUT_MS = 5_000;
+const DEFAULT_STARTUP_TIMEOUT_MS = 15_000;
 const DEFAULT_PING_TIMEOUT_MS = 500;
 
 export interface PotProviderHealth {
@@ -45,7 +45,7 @@ export class PotProviderSupervisor implements PotProviderHealth {
 
   constructor(options: PotProviderSupervisorOptions = {}) {
     this.enabled = options.enabled ?? process.env.NODE_ENV === 'production';
-    this.nodeExecutable = options.nodeExecutable ?? (process.env.POT_PROVIDER_NODE_PATH?.trim() || 'node');
+    this.nodeExecutable = options.nodeExecutable ?? (process.env.POT_PROVIDER_NODE_PATH?.trim() || process.execPath);
     this.entrypoint = options.entrypoint ?? (process.env.POT_PROVIDER_ENTRYPOINT?.trim() || '/opt/bgutil/server/build/main.js');
     this.host = options.host ?? '127.0.0.1';
     this.port = options.port ?? configuredPort(process.env.POT_PROVIDER_PORT);
