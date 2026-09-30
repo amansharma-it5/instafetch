@@ -1,4 +1,7 @@
 import { createApp } from './app.js';
+import { isFfmpegAvailable, isFfprobeAvailable } from './services/extraction/ffmpeg-process.js';
+import { PotProviderSupervisor } from './services/extraction/pot-provider.js';
+import { YtDlpYouTubeProvider } from './services/extraction/YtDlpYouTubeProvider.js';
 import { MediaMaterializer } from './services/media/media-materializer.js';
 import { ResolutionStore } from './services/store/resolution-store.js';
 import { DownloadTokenService, isSecureDownloadTokenSecret } from './services/tokens/download-tokens.js';
@@ -18,16 +21,56 @@ const configuredSecret = process.env.DOWNLOAD_TOKEN_SECRET?.trim();
 const tokenService = isSecureDownloadTokenSecret(configuredSecret)
   ? new DownloadTokenService(configuredSecret)
   : undefined;
-const server = createApp({ store, materializer, tokenService }).listen(port, '0.0.0.0', () => {
-  process.stdout.write(`InstaFetch API listening on port ${port}\n`);
-});
+const providerEnabled = process.env.NODE_ENV === 'production' || process.env.POT_PROVIDER_ENABLED === 'true';
+const potProvider = new PotProviderSupervisor({ enabled: providerEnabled });
 
-function shutdown(): void {
-  server.close(() => {
-    void materializer.dispose();
-    store.dispose();
+async function startServer(): Promise<void> {
+  // In production the provider is a required local dependency. A startup
+  // failure must keep the service out of Render's ready pool instead of
+  // accepting YouTube requests that are guaranteed to fail later.
+  await potProvider.start();
+  const youtubeProvider = new YtDlpYouTubeProvider({
+    potProvider,
+    requirePotProvider: providerEnabled,
   });
+  const app = createApp({
+    store,
+    materializer,
+    tokenService,
+    youtubeProvider,
+    runtimeChecks: () => ({
+      ffmpeg: isFfmpegAvailable(),
+      ffprobe: isFfprobeAvailable(),
+      potProvider: potProvider.isAvailable(),
+    }),
+  });
+  const server = app.listen(port, '0.0.0.0', () => {
+    process.stdout.write(`InstaFetch API listening on port ${port}\n`);
+  });
+
+  let shuttingDown = false;
+  const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    server.close(() => {
+      void Promise.all([
+        materializer.dispose(),
+        potProvider.stop(),
+      ]).finally(() => {
+        store.dispose();
+      });
+    });
+  };
+
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 }
 
-process.once('SIGINT', shutdown);
-process.once('SIGTERM', shutdown);
+void startServer().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : 'Server startup failed';
+  process.stderr.write(`${message}\n`);
+  store.dispose();
+  void materializer.dispose();
+  void potProvider.stop();
+  process.exitCode = 1;
+});

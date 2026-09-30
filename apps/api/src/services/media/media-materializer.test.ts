@@ -246,6 +246,20 @@ describe('MediaMaterializer', () => {
     await materializer.dispose();
   });
 
+  it('bounds a response body that never emits data', async () => {
+    const stalled = new Readable({ read() { /* intentionally stalled */ } });
+    const materializer = new MediaMaterializer({
+      rootDir: root(),
+      downloadTimeoutMs: 20,
+      requestUpstream: async () => ({ statusCode: 200, headers: {}, body: stalled }),
+      allowedHosts: () => true,
+    });
+
+    await expect(materializer.materialize('resolution-1', item('https://cdn.test/stalled'), Date.now() + 60_000))
+      .rejects.toMatchObject({ code: 'UPSTREAM_TIMEOUT' });
+    await materializer.dispose();
+  });
+
   it('enforces the per-resolution file limit when distinct operations finish concurrently', async () => {
     let started = 0;
     let release!: () => void;

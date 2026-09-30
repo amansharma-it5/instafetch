@@ -48,4 +48,19 @@ describe('POST /api/youtube/resolve', () => {
     expect(login.status).toBe(401);
     expect(login.body.error.code).toBe('LOGIN_REQUIRED');
   });
+
+  it('surfaces PO-token outages and provider challenges without raw extractor details', async () => {
+    const tokenUnavailable = await request(appFor(async () => {
+      throw new YtDlpProcessError('failed', 'Error reaching POST /get_pot');
+    })).post('/api/youtube/resolve').send({ url });
+    expect(tokenUnavailable.status).toBe(503);
+    expect(tokenUnavailable.body.error.code).toBe('TOKEN_PROVIDER_UNAVAILABLE');
+    expect(JSON.stringify(tokenUnavailable.body)).not.toContain('/get_pot');
+
+    const challenge = await request(appFor(async () => {
+      throw new YtDlpProcessError('failed', 'YouTube challenge response', 'PROVIDER_CHALLENGE');
+    })).post('/api/youtube/resolve').send({ url });
+    expect(challenge.status).toBe(422);
+    expect(challenge.body.error.code).toBe('PROVIDER_CHALLENGE');
+  });
 });

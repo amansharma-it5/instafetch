@@ -12,6 +12,7 @@ import type { InstagramExtractionProvider } from './services/extraction/Instagra
 import type { YouTubeExtractionProvider } from './services/extraction/YouTubeExtractionProvider.js';
 import { InstagramProviderChain } from './services/extraction/provider-chain.js';
 import { YtDlpYouTubeProvider } from './services/extraction/YtDlpYouTubeProvider.js';
+import { isFfmpegAvailable, isFfprobeAvailable } from './services/extraction/ffmpeg-process.js';
 import { MediaMaterializer } from './services/media/media-materializer.js';
 import { ResolutionStore } from './services/store/resolution-store.js';
 import { DownloadTokenService, isSecureDownloadTokenSecret } from './services/tokens/download-tokens.js';
@@ -83,6 +84,7 @@ export interface AppOptions {
   downloadRateLimit?: number;
   /** Backwards-compatible override for both media routes. */
   mediaRateLimit?: number;
+  runtimeChecks?: () => { ffmpeg: boolean; ffprobe: boolean; potProvider: boolean };
 }
 
 export function createApp(options: AppOptions = {}) {
@@ -93,6 +95,11 @@ export function createApp(options: AppOptions = {}) {
   const store = options.store ?? new ResolutionStore();
   const materializer = options.materializer ?? new MediaMaterializer();
   const tokenService = options.tokenService ?? createDefaultTokenService();
+  const runtimeChecks = options.runtimeChecks ?? (() => ({
+    ffmpeg: isFfmpegAvailable(),
+    ffprobe: isFfprobeAvailable(),
+    potProvider: true,
+  }));
   const rateLimitHandler = (_request: express.Request, response: express.Response) => {
     response.setHeader('Cache-Control', 'no-store');
     response.status(429).json({
@@ -153,13 +160,22 @@ export function createApp(options: AppOptions = {}) {
   app.get('/health/ready', (_request, response) => {
     const instagramAvailable = provider.isAvailable();
     const youtubeAvailable = youtubeProvider.isAvailable();
-    const ready = instagramAvailable && Boolean(tokenService);
+    const dependencies = runtimeChecks();
+    const ready = instagramAvailable
+      && youtubeAvailable
+      && dependencies.ffmpeg
+      && dependencies.ffprobe
+      && dependencies.potProvider
+      && Boolean(tokenService);
     response.setHeader('Cache-Control', 'no-store');
     response.status(ready ? 200 : 503).json({
       status: ready ? 'ready' : 'not_ready',
       providers: {
         instagram: instagramAvailable,
         youtube: youtubeAvailable,
+        ffmpeg: dependencies.ffmpeg,
+        ffprobe: dependencies.ffprobe,
+        potProvider: dependencies.potProvider,
       },
     });
   });

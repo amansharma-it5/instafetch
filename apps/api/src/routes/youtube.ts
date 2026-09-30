@@ -28,6 +28,8 @@ function message(code: ApiError['code']): string {
     case 'UNSUPPORTED_MEDIA': return 'No downloadable public video format was exposed';
     case 'EXTRACTION_TIMEOUT': return 'YouTube media resolution timed out';
     case 'PROVIDER_UNAVAILABLE': return 'The YouTube extraction provider is unavailable';
+    case 'TOKEN_PROVIDER_UNAVAILABLE': return 'The YouTube token provider is temporarily unavailable';
+    case 'PROVIDER_CHALLENGE': return 'YouTube did not expose this media to the anonymous provider';
     case 'PROVIDER_MALFORMED_RESPONSE': return 'YouTube returned an unsupported media response';
     case 'RATE_LIMITED': return 'The service is temporarily rate limited';
     default: return 'The request could not be processed';
@@ -43,6 +45,8 @@ function providerError(error: unknown): ApiError {
     if (error.kind === 'timeout') return new ApiError('EXTRACTION_TIMEOUT', message('EXTRACTION_TIMEOUT'), 504);
     if (error.kind === 'unavailable') return new ApiError('PROVIDER_UNAVAILABLE', message('PROVIDER_UNAVAILABLE'), 503);
     if (error.kind === 'malformed') return new ApiError('PROVIDER_MALFORMED_RESPONSE', message('PROVIDER_MALFORMED_RESPONSE'), 502);
+    if (error.code === 'TOKEN_PROVIDER_UNAVAILABLE') return new ApiError('TOKEN_PROVIDER_UNAVAILABLE', message('TOKEN_PROVIDER_UNAVAILABLE'), 503);
+    if (error.code === 'PROVIDER_CHALLENGE') return new ApiError('PROVIDER_CHALLENGE', message('PROVIDER_CHALLENGE'), 422);
     const detail = error.message.toLowerCase();
     if (/rate.?limit|429|too many requests|temporarily blocked/.test(detail)) return new ApiError('RATE_LIMITED', message('RATE_LIMITED'), 429);
     if (/age.?restrict/.test(detail)) return new ApiError('AGE_RESTRICTED', message('AGE_RESTRICTED'), 422);

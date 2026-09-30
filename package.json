@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "lint": "eslint .",
-    "test": "vitest run --config vitest.config.ts",
+    "build:shared": "npm --workspace @instafetch/shared run build",
+    "test": "npm run build:shared && vitest run --config vitest.config.ts",
     "build": "npm --workspace @instafetch/shared run build && npm --workspace @instafetch/api run build && npm --workspace @instafetch/web run build",
     "instagram:feasibility": "tsx scripts/instagram-feasibility.ts",
     "smoke:production": "tsx scripts/production-smoke.ts",

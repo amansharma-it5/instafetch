@@ -57,6 +57,8 @@ export interface MediaMaterializerOptions {
   rootDir?: string;
   ttlMs?: number;
   timeoutMs?: number;
+  /** Maximum wall-clock time for each upstream media stream. */
+  downloadTimeoutMs?: number;
   maxFileBytes?: number;
   maxTotalBytes?: number;
   maxFilesPerResolution?: number;
@@ -80,6 +82,7 @@ interface CachedMedia extends MaterializedMedia {
 const DEFAULT_MAX_FILE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_BYTES = 500 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_DOWNLOAD_TIMEOUT_MS = 90_000;
 const DEFAULT_TTL_MS = 5 * 60_000;
 const DEFAULT_MAX_REDIRECTS = 3;
 const DEFAULT_MAX_CONCURRENT = 2;
@@ -163,7 +166,13 @@ async function defaultRequestUpstream(url: string, timeoutMs: number): Promise<U
   return new Promise((resolve, reject) => {
     const request = httpsRequest(parsed, {
       method: 'GET',
-      headers: { accept: 'video/mp4,image/avif,image/webp,image/png,image/jpeg,image/gif' },
+      // Some provider-backed YouTube audio URLs reject a plain GET but allow
+      // an open-ended range request. This still asks for the complete stream
+      // while remaining compatible with CDNs that ignore Range.
+      headers: {
+        accept: 'video/mp4,image/avif,image/webp,image/png,image/jpeg,image/gif',
+        range: 'bytes=0-',
+      },
       servername: parsed.hostname,
       lookup: (_hostname, options, callback) => {
         if (options.all) {
@@ -172,11 +181,16 @@ async function defaultRequestUpstream(url: string, timeoutMs: number): Promise<U
           callback(null, resolved.address, resolved.family);
         }
       },
-    }, (response: IncomingMessage) => resolve({
-      statusCode: response.statusCode ?? 0,
-      headers: response.headers,
-      body: response,
-    }));
+    }, (response: IncomingMessage) => {
+      response.setTimeout(timeoutMs, () => {
+        response.destroy(new MediaMaterializationError('UPSTREAM_TIMEOUT', 'The upstream media request timed out'));
+      });
+      resolve({
+        statusCode: response.statusCode ?? 0,
+        headers: response.headers,
+        body: response,
+      });
+    });
     request.setTimeout(timeoutMs, () => {
       request.destroy(new MediaMaterializationError('UPSTREAM_TIMEOUT', 'The upstream media request timed out'));
     });
@@ -245,6 +259,7 @@ export class MediaMaterializer {
   private readonly rootDir: string;
   private readonly ttlMs: number;
   private readonly timeoutMs: number;
+  private readonly downloadTimeoutMs: number;
   private readonly maxFileBytes: number;
   private readonly maxTotalBytes: number;
   private readonly maxFilesPerResolution: number;
@@ -268,6 +283,7 @@ export class MediaMaterializer {
     this.rootDir = resolvePath(options.rootDir ?? join(tmpdir(), 'instafetch-media'));
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.downloadTimeoutMs = options.downloadTimeoutMs ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
     this.maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
     this.maxTotalBytes = options.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES;
     this.maxFilesPerResolution = options.maxFilesPerResolution ?? 50;
@@ -303,7 +319,7 @@ export class MediaMaterializer {
     let current = sourceUrl;
     for (let redirect = 0; redirect <= this.maxRedirects; redirect += 1) {
       const parsed = this.assertSourceUrl(current);
-      const response = await this.requestUpstream(parsed.toString(), this.timeoutMs);
+      const response = await this.requestUpstream(parsed.toString(), this.downloadTimeoutMs);
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         if (redirect === this.maxRedirects) {
           response.body.resume();
@@ -341,8 +357,12 @@ export class MediaMaterializer {
 
     this.temporaryPaths.add(targetPath);
     const capture = new BoundedCapture(this.maxFileBytes);
+    const body = response.body as NodeJS.ReadableStream & { destroy?: (error?: Error) => void };
+    const timeout = setTimeout(() => {
+      body.destroy?.(new MediaMaterializationError('UPSTREAM_TIMEOUT', 'The upstream media request timed out'));
+    }, this.downloadTimeoutMs);
     try {
-      await pipeline(response.body, capture, createWriteStream(targetPath, { flags: 'wx' }));
+      await pipeline(body, capture, createWriteStream(targetPath, { flags: 'wx' }));
       const kind = detectKind(capture.header);
       const valid = expected === 'audio'
         ? isAudioContainer(capture.header)
@@ -358,6 +378,8 @@ export class MediaMaterializer {
       throw error instanceof MediaMaterializationError
         ? error
         : new MediaMaterializationError('DOWNLOAD_FAILED', 'The media could not be downloaded');
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

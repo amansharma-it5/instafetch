@@ -3,14 +3,50 @@ import { existsSync, readdirSync, type Dirent } from 'node:fs';
 import { delimiter, join } from 'node:path';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024;
+// Some public Shorts expose a larger format inventory than ordinary videos;
+// keep the metadata pipe bounded without rejecting valid inventories.
+const DEFAULT_MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 
 export type YtDlpProcessFailureKind = 'unavailable' | 'timeout' | 'failed' | 'malformed';
+
+export type YtDlpFailureCode =
+  | 'PROVIDER_CHALLENGE'
+  | 'TOKEN_PROVIDER_UNAVAILABLE'
+  | 'LOGIN_REQUIRED'
+  | 'PRIVATE_MEDIA'
+  | 'AGE_RESTRICTED'
+  | 'DRM_UNSUPPORTED'
+  | 'MEDIA_TOO_LONG'
+  | 'FILE_TOO_LARGE'
+  | 'EXTRACTION_TIMEOUT'
+  | 'EXTRACTION_FAILED';
+
+export function classifyYtDlpFailure(value: string): YtDlpFailureCode {
+  const detail = value.toLowerCase();
+  if (/bgutil|po token|pot provider|botguard|webpo|\/get_pot|\/ping/.test(detail)) {
+    if (/provider|bgutil|po token|pot provider|\/get_pot|\/ping|server is not available|could not be generated/.test(detail)) {
+      return 'TOKEN_PROVIDER_UNAVAILABLE';
+    }
+    return 'PROVIDER_CHALLENGE';
+  }
+  if (/age.?restrict|confirm your age|age.?gate/.test(detail)) return 'AGE_RESTRICTED';
+  if (/drm|encrypted|protected content/.test(detail)) return 'DRM_UNSUPPORTED';
+  if (/private|members.?only|video unavailable|content unavailable|not available/.test(detail)) return 'PRIVATE_MEDIA';
+  if (/sign in|login|authentication|cookies?/.test(detail)) return 'LOGIN_REQUIRED';
+  if (/longer than|duration|file too large|exceeds.*size|too large/.test(detail)) return 'MEDIA_TOO_LONG';
+  if (/not a bot|confirm .*bot|bot detected|challenge_required|temporarily blocked|http error 403|forbidden/.test(detail)) return 'PROVIDER_CHALLENGE';
+  return 'EXTRACTION_FAILED';
+}
 
 export class YtDlpProcessError extends Error {
   constructor(
     public readonly kind: YtDlpProcessFailureKind,
     message: string,
+    public readonly code: YtDlpFailureCode = kind === 'timeout'
+      ? 'EXTRACTION_TIMEOUT'
+      : kind === 'failed'
+        ? classifyYtDlpFailure(message)
+        : 'EXTRACTION_FAILED',
   ) {
     super(message);
     this.name = 'YtDlpProcessError';
@@ -22,8 +58,10 @@ export interface YtDlpProcessOptions {
   timeoutMs?: number;
   maxOutputBytes?: number;
   spawnImpl?: typeof spawn;
-  /** Fixed anonymous YouTube client fallback; never user-controlled. */
-  youtubePlayerClient?: 'android_vr';
+  /** Fixed anonymous YouTube clients; never user-controlled. */
+  youtubePlayerClient?: 'mweb' | 'android_vr';
+  /** Loopback-only PO token provider base URL for the mweb attempt. */
+  youtubePotProviderUrl?: string;
 }
 
 export interface YtDlpMetadata {
@@ -38,8 +76,10 @@ export function redactUrls(value: string): string {
   return value.replace(/https?:\/\/[^\s)]+/gi, '[redacted-url]');
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function redactSecrets(value: string): string {
+  return redactUrls(value)
+    .replace(/((?:po[_-]?token|visitor[_-]?data|signature|sparams|token|key)\s*[:=]\s*)[^\s,;]+/gi, '$1[redacted]')
+    .replace(/([?&](?:pot|po_token|visitor_data|signature|sparams|token|key)=)[^&\s]+/gi, '$1[redacted]');
 }
 
 function findOnPath(fileName: string): string | undefined {
@@ -140,11 +180,22 @@ export function buildYtDlpArgs(canonicalUrl: string, options: Pick<YtDlpProcessO
     '--no-warnings',
     '--no-cache-dir',
     '--no-call-home',
+    '--js-runtimes', 'node',
   ];
   if (options.youtubePlayerClient) {
     args.push('--extractor-args', `youtube:player_client=${options.youtubePlayerClient}`);
   }
   args.push('--', canonicalUrl);
+  return args;
+}
+
+function buildYtDlpProcessArgs(canonicalUrl: string, options: YtDlpProcessOptions): string[] {
+  const args = buildYtDlpArgs(canonicalUrl, options);
+  if (options.youtubePotProviderUrl && options.youtubePlayerClient === 'mweb') {
+    const separator = args.indexOf('--');
+    const providerArgs = ['--extractor-args', `youtubepot-bgutilhttp:base_url=${options.youtubePotProviderUrl}`];
+    args.splice(separator, 0, ...providerArgs);
+  }
   return args;
 }
 
@@ -162,9 +213,9 @@ function spawnYtDlp(canonicalUrl: string, options: YtDlpProcessOptions): Promise
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
       };
-      child = spawnImpl(executable, buildYtDlpArgs(canonicalUrl, options), spawnOptions);
-    } catch (error) {
-      rejectOutput(new YtDlpProcessError('unavailable', `yt-dlp could not be started: ${redactUrls(errorMessage(error))}`));
+      child = spawnImpl(executable, buildYtDlpProcessArgs(canonicalUrl, options), spawnOptions);
+    } catch {
+      rejectOutput(new YtDlpProcessError('unavailable', 'yt-dlp could not be started'));
       return;
     }
 
@@ -225,16 +276,16 @@ function spawnYtDlp(canonicalUrl: string, options: YtDlpProcessOptions): Promise
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk: string | Buffer) => append('stdout', chunk));
     child.stderr.on('data', (chunk: string | Buffer) => append('stderr', chunk));
-    child.once('error', (error) => {
-      finish(new YtDlpProcessError('unavailable', `yt-dlp could not be started: ${redactUrls(errorMessage(error))}`));
+    child.once('error', (_error) => {
+      finish(new YtDlpProcessError('unavailable', 'yt-dlp could not be started'));
     });
     child.once('close', (code) => {
       if (settled) {
         return;
       }
       if (code !== 0) {
-        const detail = redactUrls(stderr.trim()).slice(0, 1000);
-        finish(new YtDlpProcessError('failed', `yt-dlp exited with code ${code ?? 'unknown'}${detail ? `: ${detail}` : ''}`));
+        const failureCode = classifyYtDlpFailure(redactSecrets(stderr));
+        finish(new YtDlpProcessError('failed', `yt-dlp exited with code ${code ?? 'unknown'}`, failureCode));
         return;
       }
       finish(undefined, stdout);
