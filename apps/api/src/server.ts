@@ -22,7 +22,12 @@ const tokenService = isSecureDownloadTokenSecret(configuredSecret)
   ? new DownloadTokenService(configuredSecret)
   : undefined;
 const providerEnabled = process.env.NODE_ENV === 'production' || process.env.POT_PROVIDER_ENABLED === 'true';
-const potProvider = new PotProviderSupervisor({ enabled: providerEnabled });
+const potProvider = new PotProviderSupervisor({
+  enabled: providerEnabled,
+  onDiagnostic: (diagnostic) => {
+    process.stderr.write(`${JSON.stringify(diagnostic)}\n`);
+  },
+});
 
 async function startServer(): Promise<void> {
   // A provider startup failure disables YouTube while keeping the API and
@@ -36,6 +41,7 @@ async function startServer(): Promise<void> {
       process.stderr.write('YouTube token provider unavailable; YouTube extraction is disabled\n');
       retryTimer = setTimeout(() => {
         retryTimer = undefined;
+        process.stderr.write(`${JSON.stringify({ event: 'pot_provider_restart_attempt' })}\n`);
         void startProvider();
       }, 15_000);
       retryTimer.unref();
