@@ -37,10 +37,31 @@ describe('health endpoints', () => {
   });
 
   it('reports readiness', async () => {
-    const response = await request(createApp({ provider, youtubeProvider: provider })).get('/health/ready');
+    const response = await request(createApp({
+      provider,
+      youtubeProvider: provider,
+      runtimeChecks: () => ({ ffmpeg: true, ffprobe: true, potProvider: true }),
+    })).get('/health/ready');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: 'ready', providers: { instagram: true, youtube: true } });
+    expect(response.body).toEqual({
+      status: 'ready',
+      providers: { instagram: true, youtube: true, ffmpeg: true, ffprobe: true, potProvider: true },
+    });
+  });
+
+  it('keeps core readiness while reporting an unavailable YouTube provider', async () => {
+    const response = await request(createApp({
+      provider,
+      youtubeProvider: { isAvailable: () => false, resolve: async () => ({}) },
+      runtimeChecks: () => ({ ffmpeg: true, ffprobe: true, potProvider: true }),
+    })).get('/health/ready');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      status: 'ready',
+      providers: { instagram: true, youtube: false, ffmpeg: true, ffprobe: true, potProvider: true },
+    });
   });
 
   it('returns a safe JSON response for unknown routes without allowing caching', async () => {

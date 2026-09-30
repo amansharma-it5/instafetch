@@ -7,11 +7,14 @@ import pino from 'pino';
 import { createInstagramRouter } from './routes/instagram.js';
 import { createYouTubeRouter } from './routes/youtube.js';
 import { createMediaRouter } from './routes/media.js';
+import { parseYouTubeUrl } from '@instafetch/shared';
 import { ApiError } from './services/errors.js';
 import type { InstagramExtractionProvider } from './services/extraction/InstagramExtractionProvider.js';
 import type { YouTubeExtractionProvider } from './services/extraction/YouTubeExtractionProvider.js';
 import { InstagramProviderChain } from './services/extraction/provider-chain.js';
 import { YtDlpYouTubeProvider } from './services/extraction/YtDlpYouTubeProvider.js';
+import { normalizeYouTubeMetadata } from './services/extraction/normalize-youtube.js';
+import { isFfmpegAvailable, isFfprobeAvailable } from './services/extraction/ffmpeg-process.js';
 import { MediaMaterializer } from './services/media/media-materializer.js';
 import { ResolutionStore } from './services/store/resolution-store.js';
 import { DownloadTokenService, isSecureDownloadTokenSecret } from './services/tokens/download-tokens.js';
@@ -83,6 +86,7 @@ export interface AppOptions {
   downloadRateLimit?: number;
   /** Backwards-compatible override for both media routes. */
   mediaRateLimit?: number;
+  runtimeChecks?: () => { ffmpeg: boolean; ffprobe: boolean; potProvider: boolean };
 }
 
 export function createApp(options: AppOptions = {}) {
@@ -93,6 +97,11 @@ export function createApp(options: AppOptions = {}) {
   const store = options.store ?? new ResolutionStore();
   const materializer = options.materializer ?? new MediaMaterializer();
   const tokenService = options.tokenService ?? createDefaultTokenService();
+  const runtimeChecks = options.runtimeChecks ?? (() => ({
+    ffmpeg: isFfmpegAvailable(),
+    ffprobe: isFfprobeAvailable(),
+    potProvider: true,
+  }));
   const rateLimitHandler = (_request: express.Request, response: express.Response) => {
     response.setHeader('Cache-Control', 'no-store');
     response.status(429).json({
@@ -153,13 +162,20 @@ export function createApp(options: AppOptions = {}) {
   app.get('/health/ready', (_request, response) => {
     const instagramAvailable = provider.isAvailable();
     const youtubeAvailable = youtubeProvider.isAvailable();
-    const ready = instagramAvailable && Boolean(tokenService);
+    const dependencies = runtimeChecks();
+    const ready = instagramAvailable
+      && dependencies.ffmpeg
+      && dependencies.ffprobe
+      && Boolean(tokenService);
     response.setHeader('Cache-Control', 'no-store');
     response.status(ready ? 200 : 503).json({
       status: ready ? 'ready' : 'not_ready',
       providers: {
         instagram: instagramAvailable,
         youtube: youtubeAvailable,
+        ffmpeg: dependencies.ffmpeg,
+        ffprobe: dependencies.ffprobe,
+        potProvider: dependencies.potProvider,
       },
     });
   });
@@ -210,7 +226,22 @@ export function createApp(options: AppOptions = {}) {
     legacyHeaders: false,
     handler: rateLimitHandler,
   });
-  app.use('/api', createMediaRouter({ store, materializer, tokenService, previewRateLimiter, downloadRateLimiter }));
+  const refreshYouTubeOption = async (resolution: import('./services/store/resolution-store.js').StoredResolution, item: import('./services/extraction/normalize-instagram.js').InternalMediaItem) => {
+    if (resolution.platform !== 'youtube' || item.platform !== 'youtube' || !item.optionKind) return null;
+    try {
+      const validated = parseYouTubeUrl(resolution.canonicalUrl);
+      const normalized = normalizeYouTubeMetadata(await youtubeProvider.resolve(validated), validated.route);
+      const replacement = normalized.items.find((candidate) => candidate.optionKind === item.optionKind
+        && candidate.extension === item.extension
+        && candidate.height === item.height
+        && candidate.width === item.width
+        && (candidate.bitrateKbps ?? null) === (item.bitrateKbps ?? null));
+      return replacement ? store.replaceItem(resolution.id, item.id, { ...replacement, id: item.id }) ?? null : null;
+    } catch {
+      return null;
+    }
+  };
+  app.use('/api', createMediaRouter({ store, materializer, tokenService, previewRateLimiter, downloadRateLimiter, refreshYouTubeOption }));
 
   // Keep unknown API paths on the same safe JSON contract as known failures.
   app.use((_request, _response, next) => {

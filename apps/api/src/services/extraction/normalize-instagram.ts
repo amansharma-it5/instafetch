@@ -28,6 +28,14 @@ export interface InternalMediaItem {
   hasAudio?: boolean;
   container?: string | null;
   sourceType?: string;
+  optionKind?: 'video' | 'audio' | 'mp3';
+  sizeKind?: 'exact' | 'estimated' | 'unknown';
+  fps?: number | null;
+  bitrateKbps?: number | null;
+  requiresMux?: boolean;
+  requiresTranscode?: boolean;
+  compatibilityLabel?: string;
+  sourceFormatId?: string | null;
 }
 
 export interface NormalizedInstagramResult {

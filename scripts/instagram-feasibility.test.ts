@@ -52,6 +52,8 @@ describe('Instagram feasibility harness', () => {
       '--no-warnings',
       '--no-cache-dir',
       '--no-call-home',
+      '--js-runtimes',
+      'node',
       '--',
       'https://www.instagram.com/p/ABC123/',
     ]);

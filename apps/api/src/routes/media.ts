@@ -4,6 +4,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { z } from 'zod';
 import { ApiError } from '../services/errors.js';
 import { MediaMaterializationError, MediaMaterializer, type MaterializedMedia } from '../services/media/media-materializer.js';
+import type { InternalMediaItem } from '../services/extraction/normalize-instagram.js';
 import { ResolutionStore } from '../services/store/resolution-store.js';
 import { DownloadTokenError, DownloadTokenService, type DownloadTokenPurpose } from '../services/tokens/download-tokens.js';
 
@@ -15,6 +16,7 @@ export interface MediaRouteDependencies {
   tokenService?: DownloadTokenService;
   previewRateLimiter?: import('express').RequestHandler;
   downloadRateLimiter?: import('express').RequestHandler;
+  refreshYouTubeOption?: (resolution: import('../services/store/resolution-store.js').StoredResolution, item: InternalMediaItem) => Promise<InternalMediaItem | null>;
 }
 
 function messageForCode(code: ApiError['code']): string {
@@ -103,14 +105,22 @@ async function streamMedia(request: Request, response: Response, media: Material
   stream.pipe(response);
 }
 
-export function createMediaRouter({ store, materializer, tokenService, previewRateLimiter, downloadRateLimiter }: MediaRouteDependencies): Router {
+export function createMediaRouter({ store, materializer, tokenService, previewRateLimiter, downloadRateLimiter, refreshYouTubeOption }: MediaRouteDependencies): Router {
   const router = Router();
 
   const handle = (purpose: DownloadTokenPurpose, attachment: boolean) => async (request: Request, response: Response, next: NextFunction) => {
     try {
       const token = tokenFromRequest(request, purpose, tokenService);
       const { resolution, item } = getMedia(token, store);
-      const materialized = await materializer.materialize(resolution.id, item, resolution.expiresAt);
+      let materialized: MaterializedMedia;
+      try {
+        materialized = await materializer.materialize(resolution.id, item, resolution.expiresAt);
+      } catch (error) {
+        if (!(error instanceof MediaMaterializationError) || error.code !== 'MEDIA_UNAVAILABLE' || item.platform !== 'youtube' || !refreshYouTubeOption) throw error;
+        const refreshed = await refreshYouTubeOption(resolution, item);
+        if (!refreshed) throw error;
+        materialized = await materializer.materialize(resolution.id, refreshed, resolution.expiresAt);
+      }
       // Video thumbnails are not fetched from a second upstream URL in Phase 3A;
       // preview safely falls back to the verified media stream itself.
       await streamMedia(request, response, materialized, attachment);
@@ -119,7 +129,22 @@ export function createMediaRouter({ store, materializer, tokenService, previewRa
     }
   };
 
+  const handleThumbnail = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const token = tokenFromRequest(request, 'thumbnail', tokenService);
+      const resolution = store.get(token.resolutionId);
+      if (!resolution || !resolution.thumbnailUrl || token.mediaId !== `thumbnail-${resolution.id}`) {
+        throw new ApiError('MEDIA_NOT_FOUND', messageForCode('MEDIA_NOT_FOUND'), 404);
+      }
+      const materialized = await materializer.materializeThumbnail(resolution.id, resolution.thumbnailUrl, resolution.expiresAt);
+      await streamMedia(request, response, materialized, false);
+    } catch (error) {
+      next(error instanceof ApiError ? error : mediaError(error));
+    }
+  };
+
   router.get('/download', downloadRateLimiter ?? ((_request, _response, next) => next()), handle('download', true));
   router.get('/preview', previewRateLimiter ?? ((_request, _response, next) => next()), handle('preview', false));
+  router.get('/thumbnail', previewRateLimiter ?? ((_request, _response, next) => next()), handleThumbnail);
   return router;
 }

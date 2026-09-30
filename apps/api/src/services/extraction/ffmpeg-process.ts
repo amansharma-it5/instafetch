@@ -154,6 +154,21 @@ export function buildFfmpegTranscodeArgs(videoPath: string, audioPath: string, o
   ];
 }
 
+export function buildFfmpegAudioTranscodeArgs(audioPath: string, outputPath: string, bitrateKbps = 128): string[] {
+  return [
+    '-hide_banner',
+    '-loglevel', 'error',
+    '-nostdin',
+    '-y',
+    '-i', audioPath,
+    '-vn',
+    '-c:a', 'libmp3lame',
+    '-b:a', `${Math.max(32, Math.min(320, Math.round(bitrateKbps)))}k`,
+    '-f', 'mp3',
+    outputPath,
+  ];
+}
+
 export async function runFfmpeg(args: string[], options: MediaProcessOptions = {}): Promise<void> {
   const executable = options.executable ?? resolveFfmpegExecutable();
   if (!isFfmpegAvailable(executable)) {

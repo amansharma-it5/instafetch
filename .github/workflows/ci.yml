@@ -19,6 +19,10 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: mcr.microsoft.com/playwright:v1.63.0-noble
+    env:
+      HOME: /root
 
     steps:
       - name: Check out repository
@@ -45,8 +49,8 @@ jobs:
       - name: Build workspaces
         run: npm run build
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
+      - name: Verify Playwright runtime
+        run: npx playwright --version
 
       - name: Run end-to-end tests
         run: npm run e2e
