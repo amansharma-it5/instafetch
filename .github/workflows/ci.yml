@@ -21,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container: mcr.microsoft.com/playwright:v1.63.0-noble
+    env:
+      HOME: /root
 
     steps:
       - name: Check out repository
