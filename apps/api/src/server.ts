@@ -25,10 +25,14 @@ const providerEnabled = process.env.NODE_ENV === 'production' || process.env.POT
 const potProvider = new PotProviderSupervisor({ enabled: providerEnabled });
 
 async function startServer(): Promise<void> {
-  // In production the provider is a required local dependency. A startup
-  // failure must keep the service out of Render's ready pool instead of
-  // accepting YouTube requests that are guaranteed to fail later.
-  await potProvider.start();
+  // A provider startup failure disables YouTube while keeping the API and
+  // verified Instagram path available. The readiness response exposes the
+  // degraded provider state without leaking startup details.
+  try {
+    await potProvider.start();
+  } catch {
+    process.stderr.write('YouTube token provider unavailable; YouTube extraction is disabled\n');
+  }
   const youtubeProvider = new YtDlpYouTubeProvider({
     potProvider,
     requirePotProvider: providerEnabled,

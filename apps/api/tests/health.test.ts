@@ -50,16 +50,16 @@ describe('health endpoints', () => {
     });
   });
 
-  it('does not report readiness when the YouTube provider is unavailable', async () => {
+  it('keeps core readiness while reporting an unavailable YouTube provider', async () => {
     const response = await request(createApp({
       provider,
       youtubeProvider: { isAvailable: () => false, resolve: async () => ({}) },
       runtimeChecks: () => ({ ffmpeg: true, ffprobe: true, potProvider: true }),
     })).get('/health/ready');
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     expect(response.body).toEqual({
-      status: 'not_ready',
+      status: 'ready',
       providers: { instagram: true, youtube: false, ffmpeg: true, ffprobe: true, potProvider: true },
     });
   });

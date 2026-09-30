@@ -164,10 +164,8 @@ export function createApp(options: AppOptions = {}) {
     const youtubeAvailable = youtubeProvider.isAvailable();
     const dependencies = runtimeChecks();
     const ready = instagramAvailable
-      && youtubeAvailable
       && dependencies.ffmpeg
       && dependencies.ffprobe
-      && dependencies.potProvider
       && Boolean(tokenService);
     response.setHeader('Cache-Control', 'no-store');
     response.status(ready ? 200 : 503).json({
