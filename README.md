@@ -82,6 +82,7 @@ Frontend variable:
 - **Conditional support:** Instagram video posts, photos, carousels, Stories, and legacy TV URLs when Instagram exposes a genuine anonymous media file.
 - **Analytics:** disabled by default through `VITE_ANALYTICS_ENABLED=false`. If explicitly enabled, only the allowlisted aggregate event name and safe content category are emitted; URLs, usernames, captions, media URLs, tokens, filenames, IP addresses, and credentials are never included. No third-party tracking vendor is configured.
 - **Production verification:** run `npm run smoke:production` for frontend and health checks. To verify a public Reel or YouTube video without credentials, cookies, or browser profiles, pass one explicitly supplied URL to the same command.
+- **Feedback:** use the Contact page's bug-report or feature-request links. Reports should contain only the platform, link type, browser/device, safe error message, and expected behavior; never include credentials, cookies, private links, signed URLs, tokens, or personal information. See [`docs/first-100-users.md`](docs/first-100-users.md) for the first-user checklist and aggregate metric definitions.
 
 ## Deploy the API to Render
 

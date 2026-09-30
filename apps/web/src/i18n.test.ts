@@ -51,4 +51,12 @@ describe("locale messages", () => {
       }
     }
   });
+
+  it("keeps the feedback path available in every supported language", () => {
+    for (const locale of ["en", "es", "fr"] as const) {
+      expect(translate(locale, "feedback.prompt")).toBeTruthy();
+      expect(translate(locale, "feedback.helper")).toBeTruthy();
+      expect(translate(locale, "feedback.accessNote")).toBeTruthy();
+    }
+  });
 });

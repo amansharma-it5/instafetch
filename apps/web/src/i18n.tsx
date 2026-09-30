@@ -47,6 +47,13 @@ const messages: Record<Locale, Record<string, string>> = {
     "input.resolving": "Resolving…",
     "input.download": "Download",
     "panel.footnote": "Public content only · No login required · Playlists are not supported",
+    "feedback.prompt": "Found a problem? Send feedback",
+    "feedback.helper":
+      "Share the platform, link type, browser or device, safe error message, and whether preview or download worked. Never include passwords, cookies, private links, tokens, or personal information.",
+    "feedback.openBug": "Open a bug report",
+    "feedback.openFeature": "Suggest an improvement",
+    "feedback.accessNote":
+      "GitHub access may be required to submit a report. If you cannot open it, share the same safe details with the person who invited you.",
     "status.processing":
       "Checking the public post and preparing available media…",
     "status.waking":
@@ -301,6 +308,13 @@ const messages: Record<Locale, Record<string, string>> = {
       "Permite el acceso al portapapeles para pegar automáticamente",
     "input.resolving": "Resolviendo…",
     "panel.footnote": "Solo contenido público · Sin inicio de sesión · No se admiten listas",
+    "feedback.prompt": "¿Encontraste un problema? Envía comentarios",
+    "feedback.helper":
+      "Comparte la plataforma, el tipo de enlace, el navegador o dispositivo, el mensaje de error seguro y si funcionaron la vista previa o la descarga. Nunca incluyas contraseñas, cookies, enlaces privados, tokens ni información personal.",
+    "feedback.openBug": "Abrir un informe de error",
+    "feedback.openFeature": "Sugerir una mejora",
+    "feedback.accessNote":
+      "Puede que necesites acceso a GitHub para enviar un informe. Si no puedes abrirlo, comparte los mismos datos seguros con la persona que te invitó.",
     "input.download": "Descargar",
     "status.processing":
       "Comprobando la publicación pública y preparando los medios disponibles…",
@@ -538,6 +552,13 @@ const messages: Record<Locale, Record<string, string>> = {
       "Autorisez le presse-papiers pour coller automatiquement",
     "input.resolving": "Résolution…",
     "panel.footnote": "Contenu public uniquement · Sans connexion · Les playlists ne sont pas prises en charge",
+    "feedback.prompt": "Un problème ? Envoyez vos commentaires",
+    "feedback.helper":
+      "Indiquez la plateforme, le type de lien, le navigateur ou l’appareil, le message d’erreur non sensible et si l’aperçu ou le téléchargement a fonctionné. N’incluez jamais de mots de passe, cookies, liens privés, jetons ni informations personnelles.",
+    "feedback.openBug": "Ouvrir un rapport de bug",
+    "feedback.openFeature": "Suggérer une amélioration",
+    "feedback.accessNote":
+      "Un accès GitHub peut être nécessaire pour envoyer un rapport. Si vous ne pouvez pas l’ouvrir, partagez les mêmes informations sûres avec la personne qui vous a invité.",
     "input.download": "Télécharger",
     "status.processing":
       "Vérification de la publication publique et préparation des médias disponibles…",

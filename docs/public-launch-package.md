@@ -302,7 +302,7 @@ Use only media created by the maker, public-domain media, or synthetic test fixt
 
 ## I. Feedback readiness
 
-The existing Contact route is sufficient for v1. It points people toward the project’s public issue/contact guidance without adding a feedback SaaS, chat widget, or user database.
+The Contact route now links to structured bug and feature templates without adding a feedback SaaS, chat widget, or user database. The repository is private, so grant issue access to invited testers or provide another approved contact channel before sharing the link broadly.
 
 Suggested privacy-safe prompts:
 

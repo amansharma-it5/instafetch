@@ -250,6 +250,18 @@ test('renders the static legal and support pages', async ({ page }) => {
   }
 });
 
+test('exposes a privacy-safe feedback path and structured report links', async ({ page }) => {
+  await page.goto('/');
+  const feedback = page.getByRole('link', { name: 'Found a problem? Send feedback' });
+  await expect(feedback).toHaveAttribute('href', '/contact#feedback');
+  await feedback.click();
+  await expect(page).toHaveURL(/\/contact#feedback$/);
+  await expect(page.getByRole('heading', { name: 'Found a problem? Send feedback' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open a bug report' })).toHaveAttribute('href', /issues\/new\?template=bug-report\.yml$/);
+  await expect(page.getByRole('link', { name: 'Suggest an improvement' })).toHaveAttribute('href', /issues\/new\?template=feature-request\.yml$/);
+  await expect(page.getByText(/Never include passwords, cookies, private links, tokens/i)).toBeVisible();
+});
+
 test('maps anonymous availability errors to capability-aware copy', async ({ page }) => {
   const cases = [
     {
