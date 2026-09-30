@@ -3,6 +3,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
 import type { InstagramExtractionProvider } from '../src/services/extraction/InstagramExtractionProvider';
+import type { YouTubeExtractionProvider } from '../src/services/extraction/YouTubeExtractionProvider';
 import { MediaMaterializationError, MediaMaterializer } from '../src/services/media/media-materializer';
 import { ResolutionStore } from '../src/services/store/resolution-store';
 import { DownloadTokenService } from '../src/services/tokens/download-tokens';
@@ -170,6 +171,44 @@ describe('media delivery endpoints', () => {
     expect(download.body.equals(imageBytes)).toBe(true);
     expect(preview.headers['content-type']).toContain('image/jpeg');
     expect(JSON.stringify(resolved.body)).not.toContain('cdn.test');
+    await materializer.dispose();
+    store.dispose();
+  });
+
+  it('re-resolves one expired YouTube option without invalidating the whole result', async () => {
+    let providerCalls = 0;
+    let upstreamCalls = 0;
+    const youtubeProvider: YouTubeExtractionProvider = {
+      isAvailable: () => true,
+      resolve: async () => ({
+        title: 'Retryable public video',
+        duration: 12,
+        formats: [{
+          url: `https://cdn.test/video-${++providerCalls}.mp4`, ext: 'mp4', width: 640, height: 360,
+          vcodec: 'avc1', acodec: 'mp4a.40.2', filesize: videoBytes.length,
+        }],
+      }),
+    };
+    const store = new ResolutionStore();
+    const materializer = new MediaMaterializer({
+      requestUpstream: async () => ({
+        statusCode: ++upstreamCalls === 1 ? 403 : 200,
+        headers: {},
+        body: Readable.from(videoBytes),
+      }),
+      allowedHosts: (host) => host === 'cdn.test',
+      probeMedia: async () => ({ hasVideo: true, hasAudio: true }),
+    });
+    const tokenService = new DownloadTokenService(secret);
+    const app = createApp({ provider: provider(), youtubeProvider, store, materializer, tokenService });
+    const resolved = await request(app).post('/api/youtube/resolve').send({ url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' });
+    const option = resolved.body.data.downloadOptions[0] as { optionId: string };
+    const prepared = await request(app).post('/api/youtube/prepare').send({ jobId: resolved.body.data.jobId, optionId: option.optionId });
+    const download = await request(app).get(prepared.body.data.downloadUrl);
+    expect(download.status).toBe(200);
+    expect(download.body.equals(videoBytes)).toBe(true);
+    expect(providerCalls).toBe(2);
+    expect(upstreamCalls).toBe(2);
     await materializer.dispose();
     store.dispose();
   });

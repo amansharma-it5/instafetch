@@ -9,11 +9,48 @@ import { ApiError } from '../services/errors.js';
 import { ResolutionStore } from '../services/store/resolution-store.js';
 import type { DownloadTokenService } from '../services/tokens/download-tokens.js';
 
-const schema = z.object({ url: z.string().trim().min(1).max(2048) }).strict();
+const resolveSchema = z.object({ url: z.string().trim().min(1).max(2048) }).strict();
+const prepareSchema = z.object({ jobId: z.string().uuid(), optionId: z.string().uuid() }).strict();
 
 export interface YouTubeRouteDependencies { provider: YouTubeExtractionProvider; store: ResolutionStore; tokenService?: DownloadTokenService; }
 
-interface PublicYouTubeItem { id: string; type: 'video'; width: number | null; height: number | null; extension: string; qualityLabel: string; thumbnail: null; previewUrl: string; downloadUrl: string; durationSeconds: number | null; hasAudio: boolean; hasVideo: boolean; container: string; }
+interface PublicYouTubeItem {
+  id: string;
+  type: 'video';
+  width: number | null;
+  height: number | null;
+  extension: string;
+  qualityLabel: string;
+  thumbnail: null;
+  previewUrl: string;
+  downloadUrl?: string;
+  durationSeconds: number | null;
+  hasAudio: boolean;
+  hasVideo: boolean;
+  container: string;
+}
+
+interface PublicYouTubeOption {
+  optionId: string;
+  kind: 'video' | 'audio';
+  format: string;
+  resolution: number | null;
+  width: number | null;
+  height: number | null;
+  container: string;
+  videoCodec: string | null;
+  audioCodec: string | null;
+  fps: number | null;
+  filesizeBytes: number | null;
+  filesizeApproximate: boolean;
+  sizeBytes: number | null;
+  sizeKind: 'exact' | 'estimated' | 'unknown';
+  qualityLabel: string;
+  hasAudio: boolean;
+  requiresMux: boolean;
+  compatibilityLabel: string;
+  bitrateKbps: number | null;
+}
 
 function message(code: ApiError['code']): string {
   switch (code) {
@@ -25,13 +62,14 @@ function message(code: ApiError['code']): string {
     case 'DRM_UNSUPPORTED': return 'DRM-protected media is not supported';
     case 'MEDIA_TOO_LONG': return 'Videos longer than 20 minutes are not supported';
     case 'MEDIA_TOO_LARGE': return 'This file exceeds the safe processing limit';
-    case 'UNSUPPORTED_MEDIA': return 'No downloadable public video format was exposed';
+    case 'UNSUPPORTED_MEDIA': return 'No downloadable public video or audio format was exposed';
     case 'EXTRACTION_TIMEOUT': return 'YouTube media resolution timed out';
     case 'PROVIDER_UNAVAILABLE': return 'The YouTube extraction provider is unavailable';
     case 'TOKEN_PROVIDER_UNAVAILABLE': return 'The YouTube token provider is temporarily unavailable';
     case 'PROVIDER_CHALLENGE': return 'YouTube did not expose this media to the anonymous provider';
     case 'PROVIDER_MALFORMED_RESPONSE': return 'YouTube returned an unsupported media response';
     case 'RATE_LIMITED': return 'The service is temporarily rate limited';
+    case 'MEDIA_NOT_FOUND': return 'This result has expired. Resolve the link again.';
     default: return 'The request could not be processed';
   }
 }
@@ -57,16 +95,54 @@ function providerError(error: unknown): ApiError {
   return new ApiError('EXTRACTION_FAILED', 'YouTube media could not be resolved', 502);
 }
 
-function publicItem(item: InternalMediaItem, resolutionId: string, tokenService: DownloadTokenService): PublicYouTubeItem {
+function publicOption(item: InternalMediaItem): PublicYouTubeOption {
+  const kind = item.optionKind === 'video' ? 'video' : 'audio';
+  return {
+    optionId: item.id,
+    kind,
+    format: item.extension,
+    resolution: item.height,
+    width: item.width,
+    height: item.height,
+    container: item.container ?? item.extension,
+    videoCodec: item.videoCodec ?? null,
+    audioCodec: item.audioCodec ?? null,
+    fps: item.fps ?? null,
+    filesizeBytes: item.filesize ?? null,
+    filesizeApproximate: item.sizeKind === 'estimated',
+    sizeBytes: item.filesize ?? null,
+    sizeKind: item.sizeKind ?? (item.filesize === null ? 'unknown' : 'exact'),
+    qualityLabel: item.qualityLabel,
+    hasAudio: item.hasAudio === true,
+    requiresMux: item.requiresMux === true,
+    compatibilityLabel: item.compatibilityLabel ?? 'Prepared on download',
+    bitrateKbps: item.bitrateKbps ?? null,
+  };
+}
+
+function publicPreview(item: InternalMediaItem, resolutionId: string, tokenService: DownloadTokenService): PublicYouTubeItem {
   const preview = tokenService.issue(resolutionId, item.id, 'preview');
-  const download = tokenService.issue(resolutionId, item.id, 'download');
-  return { id: item.id, type: 'video', width: item.width, height: item.height, extension: item.extension, qualityLabel: item.qualityLabel, thumbnail: null, previewUrl: `/api/preview?token=${encodeURIComponent(preview)}`, downloadUrl: `/api/download?token=${encodeURIComponent(download)}`, durationSeconds: item.durationSeconds ?? null, hasAudio: item.hasAudio !== false, hasVideo: item.hasVideo !== false, container: item.container ?? item.extension };
+  return {
+    id: item.id,
+    type: 'video',
+    width: item.width,
+    height: item.height,
+    extension: item.extension,
+    qualityLabel: item.qualityLabel,
+    thumbnail: null,
+    previewUrl: `/api/preview?token=${encodeURIComponent(preview)}`,
+    durationSeconds: item.durationSeconds ?? null,
+    hasAudio: item.hasAudio === true,
+    hasVideo: item.hasVideo !== false,
+    container: item.container ?? item.extension,
+  };
 }
 
 export function createYouTubeRouter({ provider, store, tokenService }: YouTubeRouteDependencies): Router {
   const router = Router();
+
   router.post('/resolve', async (request: Request, response: Response) => {
-    const body = schema.safeParse(request.body);
+    const body = resolveSchema.safeParse(request.body);
     if (!body.success) throw new ApiError('INVALID_YOUTUBE_URL', message('INVALID_YOUTUBE_URL'), 400);
     let validated;
     try { validated = parseYouTubeUrl(body.data.url); }
@@ -83,8 +159,39 @@ export function createYouTubeRouter({ provider, store, tokenService }: YouTubeRo
     let normalized;
     try { normalized = normalizeYouTubeMetadata(metadata, validated.route); } catch (error) { throw providerError(error); }
     if (!tokenService) throw new ApiError('INTERNAL_ERROR', 'The request could not be processed', 500);
-    const stored = store.put({ platform: 'youtube', canonicalUrl: validated.canonicalUrl, sourceType: normalized.sourceType, title: normalized.title, author: normalized.author, thumbnailUrl: normalized.thumbnailUrl, isCarousel: false, itemCount: 1, resolvedItemCount: 1, partial: false, warning: null, items: normalized.items });
-    response.status(200).json({ success: true, data: { platform: 'youtube', sourceType: stored.sourceType, title: stored.title, author: stored.author, thumbnail: null, isCarousel: false, itemCount: 1, resolvedItemCount: 1, partial: false, warning: null, items: stored.items.map((item) => publicItem(item, stored.id, tokenService)) } });
+    const stored = store.put({
+      platform: 'youtube', canonicalUrl: validated.canonicalUrl, sourceType: normalized.sourceType,
+      title: normalized.title, author: normalized.author, thumbnailUrl: normalized.thumbnailUrl,
+      isCarousel: false, itemCount: 1, resolvedItemCount: 1, partial: false, warning: null, items: normalized.items,
+    });
+    const previewItem = stored.items.find((item) => item.id === normalized.previewItemId) ?? stored.items[0];
+    if (!previewItem) throw new ApiError('PROVIDER_MALFORMED_RESPONSE', message('PROVIDER_MALFORMED_RESPONSE'), 502);
+    const thumbnailToken = stored.thumbnailUrl ? tokenService.issue(stored.id, `thumbnail-${stored.id}`, 'thumbnail') : null;
+    const preview = publicPreview(previewItem, stored.id, tokenService);
+    const options = stored.items.map(publicOption);
+    response.status(200).json({
+      success: true,
+      data: {
+        platform: 'youtube', sourceType: stored.sourceType, title: stored.title, author: stored.author,
+        thumbnail: thumbnailToken ? `/api/thumbnail?token=${encodeURIComponent(thumbnailToken)}` : null,
+        durationSeconds: normalized.durationSeconds, jobId: stored.id, previewUrl: preview.previewUrl, previewOptionId: preview.id,
+        downloadOptions: options.filter((option) => option.kind === 'video'),
+        audioOptions: options.filter((option) => option.kind === 'audio'),
+        isCarousel: false, itemCount: 1, resolvedItemCount: 1, partial: false, warning: null, items: [preview],
+      },
+    });
   });
+
+  router.post('/prepare', async (request: Request, response: Response) => {
+    const body = prepareSchema.safeParse(request.body);
+    if (!body.success || !tokenService) throw new ApiError('INVALID_TOKEN', 'The media token is invalid', 401);
+    const resolution = store.get(body.data.jobId);
+    if (!resolution || resolution.platform !== 'youtube') throw new ApiError('MEDIA_NOT_FOUND', message('MEDIA_NOT_FOUND'), 404);
+    const item = resolution.items.find((candidate) => candidate.id === body.data.optionId && candidate.platform === 'youtube' && Boolean(candidate.optionKind));
+    if (!item) throw new ApiError('MEDIA_NOT_FOUND', message('MEDIA_NOT_FOUND'), 404);
+    const download = tokenService.issue(resolution.id, item.id, 'download');
+    response.status(200).json({ success: true, data: { optionId: item.id, downloadUrl: `/api/download?token=${encodeURIComponent(download)}`, extension: item.extension, kind: item.optionKind === 'video' ? 'video' : 'audio' } });
+  });
+
   return router;
 }

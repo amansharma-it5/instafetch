@@ -1,0 +1,99 @@
+name: Docker release gate
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: docker-release-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  production-image:
+    name: Build, boot and exercise production image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Build the exact production Dockerfile
+        run: docker build --file Dockerfile --tag instafetch-release-gate:ci .
+
+      - name: Start the production container
+        run: >-
+          docker run --detach --name instafetch-release-gate
+          --publish 3001:3001
+          --env NODE_ENV=production
+          --env PORT=3001
+          --env WEB_ORIGIN=http://127.0.0.1:3001
+          --env DOWNLOAD_TOKEN_SECRET=ci-only-release-gate-secret-0123456789abcdef
+          instafetch-release-gate:ci
+
+      - name: Wait for readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl --silent --show-error --fail --max-time 3 http://127.0.0.1:3001/health/ready > /tmp/instafetch-ready.json; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker logs instafetch-release-gate
+            exit 1
+          fi
+          node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/instafetch-ready.json','utf8')); if(body.status!=='ready' || Object.values(body.providers||{}).some(value=>value!==true)) process.exit(1); console.log('ready: all production dependencies reported healthy');"
+
+      - name: Verify bundled runtime tools and loopback provider
+        run: |
+          set -euo pipefail
+          docker exec instafetch-release-gate node --version
+          docker exec instafetch-release-gate sh -c 'yt-dlp --version'
+          docker exec instafetch-release-gate sh -c 'ffmpeg -version | head -n 1'
+          docker exec instafetch-release-gate sh -c 'ffprobe -version | head -n 1'
+          docker exec instafetch-release-gate node -e "fetch('http://127.0.0.1:4416/ping').then(async response => { if (!response.ok) throw new Error('bgutil ping failed'); const body=await response.json(); if(typeof body.version!=='string' || !body.version) throw new Error('bgutil version missing'); console.log('bgutil loopback provider:', body.version); }).catch(error => { console.error(error); process.exit(1); });"
+
+      - name: Resolve a permitted public YouTube fixture and inspect the safe response
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --silent --show-error --fail-with-body --max-time 90 \
+            -H 'content-type: application/json' \
+            --data '{"url":"https://www.youtube.com/watch?v=aqz-KE-bpKQ"}' \
+            http://127.0.0.1:3001/api/youtube/resolve)"
+          printf '%s' "$response" | node -e '
+            let input = "";
+            process.stdin.on("data", chunk => { input += chunk; });
+            process.stdin.on("end", () => {
+              const body = JSON.parse(input);
+              if (!body.success || !Array.isArray(body.data?.downloadOptions) || body.data.downloadOptions.length < 2) {
+                throw new Error("resolve did not return multiple public options");
+              }
+              const serialized = JSON.stringify(body);
+              for (const forbidden of ["googlevideo.com", "poToken", "po_token", "visitor_data", "youtubePotProviderUrl"]) {
+                if (serialized.includes(forbidden)) throw new Error(`response leaked ${forbidden}`);
+              }
+              if (body.data.items.some(item => item.downloadUrl || item.providerUrl || item.audioProviderUrl)) {
+                throw new Error("resolve returned a provider or download URL");
+              }
+              console.log(`resolve: ${body.data.downloadOptions.length} video options, ${body.data.audioOptions?.length ?? 0} audio options, no sensitive URL fields`);
+            });
+          '
+
+      - name: Print container logs if the gate fails
+        if: failure()
+        run: docker logs instafetch-release-gate
+
+      - name: Remove release-gate container
+        if: always()
+        run: docker rm --force instafetch-release-gate || true

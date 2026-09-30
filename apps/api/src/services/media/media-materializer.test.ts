@@ -316,6 +316,31 @@ describe('MediaMaterializer', () => {
     await materializer.dispose();
   });
 
+  it('streams original audio and transcodes MP3 only when requested', async () => {
+    const materializer = new MediaMaterializer({
+      rootDir: root(),
+      requestUpstream: async () => ({ statusCode: 200, headers: {}, body: Readable.from(audioBytes) }),
+      allowedHosts: () => true,
+      runFfmpeg: async (args) => {
+        const outputPath = args.at(-1);
+        if (!outputPath) throw new Error('missing output path');
+        const { writeFile } = await import('node:fs/promises');
+        await writeFile(outputPath, audioBytes);
+      },
+      probeMedia: async () => ({ hasVideo: false, hasAudio: true }),
+    });
+    const original = { ...item('https://cdn.test/audio.m4a'), optionKind: 'audio' as const, type: 'video' as const, extension: 'm4a', hasVideo: false, hasAudio: true };
+    const originalResult = await materializer.materialize('resolution-audio', original, Date.now() + 60_000);
+    expect(originalResult.contentType).toBe('audio/mp4');
+    expect(originalResult.extension).toBe('m4a');
+
+    const mp3 = { ...original, id: `mp3-${randomUUID()}`, optionKind: 'mp3' as const, extension: 'mp3', bitrateKbps: 128, requiresTranscode: true };
+    const mp3Result = await materializer.materialize('resolution-mp3', mp3, Date.now() + 60_000);
+    expect(mp3Result.contentType).toBe('audio/mpeg');
+    expect(mp3Result.extension).toBe('mp3');
+    await materializer.dispose();
+  });
+
   it('falls back to bounded H.264/AAC transcoding when MP4 remux fails', async () => {
     let calls = 0;
     const runFfmpeg = async (args: string[]) => {

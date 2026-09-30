@@ -40,11 +40,15 @@ import {
 import { parseInstagramUrl, parseYouTubeUrl, YouTubeUrlError } from "@instafetch/shared";
 import {
   ApiClientError,
+  checkEngineHealth,
   mediaUrl,
+  prepareYouTubeOption,
   resolveInstagram,
   resolveYouTube,
+  type EngineStatus,
   type ResolveData,
   type ResolveMediaItem,
+  type YouTubeDownloadOption,
 } from "./api";
 import { analytics, categoryForSourceType } from "./analytics";
 import { applyPageMetadata } from "./metadata";
@@ -94,6 +98,18 @@ type DownloaderState =
   | { status: "processing"; slow: boolean }
   | { status: "success"; data: ResolveData }
   | { status: "error"; code: string; message: string };
+
+function useEngineStatus(): EngineStatus {
+  const [status, setStatus] = useState<EngineStatus>("checking");
+  useEffect(() => {
+    let active = true;
+    void checkEngineHealth().then((next) => {
+      if (active) setStatus(next);
+    });
+    return () => { active = false; };
+  }, []);
+  return status;
+}
 
 function userMessage(code: string, t: (key: string) => string): string {
   return t(`error.${code}`) === `error.${code}`
@@ -308,8 +324,10 @@ function Header() {
 
 function DownloaderPanel({
   downloader,
+  engineStatus,
 }: {
   downloader: ReturnType<typeof useDownloader>;
+  engineStatus: EngineStatus;
 }) {
   const { t } = useI18n();
   const { value, state, onChange, submit, clear } = downloader;
@@ -331,6 +349,10 @@ function DownloaderPanel({
   };
   return (
     <div className="downloader-panel">
+      <div aria-live="polite" className={`engine-status engine-status--${engineStatus}`} role="status">
+        <span aria-hidden="true" className="engine-status__dot" />
+        {engineStatus === "ready" ? t("engine.ready") : t("engine.connecting")}
+      </div>
       <form onSubmit={submit}>
         <label className="input-label" htmlFor="instagram-url">
           {t("input.label")}
@@ -489,7 +511,16 @@ function MediaPreview({
           <span>{t("preview.loading")}</span>
         </div>
       )}
-      {item.type === "video" ? (
+      {item.type === "video" ? item.hasVideo === false ? (
+        <audio
+          aria-label={t("media.audio")}
+          controls
+          onError={() => setFailed(true)}
+          onLoadedMetadata={markLoaded}
+          preload="metadata"
+          src={mediaUrl(item.previewUrl)}
+        />
+      ) : (
         <video
           aria-label={t("media.video")}
           controls
@@ -535,7 +566,7 @@ function DownloadLink({
   );
   const download = async (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
-    if (state === "preparing") return;
+    if (!item.downloadUrl || state === "preparing") return;
     setState("preparing");
     setErrorMessage("");
     analytics.track("download_started", category);
@@ -606,7 +637,7 @@ function DownloadLink({
         aria-label={label}
         className="download-link"
         download
-        href={mediaUrl(item.downloadUrl)}
+        href={item.downloadUrl ? mediaUrl(item.downloadUrl) : undefined}
         onClick={download}
       >
         {state === "preparing" ? (
@@ -681,7 +712,171 @@ function MediaCard({
   );
 }
 
+function formatSize(option: YouTubeDownloadOption): string {
+  if (option.sizeBytes === null) return "Size unavailable";
+  const value = option.sizeBytes;
+  const units = ["B", "KB", "MB", "GB"];
+  let index = 0;
+  let amount = value;
+  while (amount >= 1024 && index < units.length - 1) {
+    amount /= 1024;
+    index += 1;
+  }
+  const formatted = amount >= 100 || index === 0 ? Math.round(amount).toString() : amount.toFixed(1);
+  return `${option.sizeKind === "estimated" ? "≈ " : ""}${formatted} ${units[index]}`;
+}
+
+function YouTubeDownloadButton({
+  jobId,
+  option,
+}: {
+  jobId: string;
+  option: YouTubeDownloadOption;
+}) {
+  const { t } = useI18n();
+  const [state, setState] = useState<"idle" | "preparing" | "fetching" | "converting" | "success" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState("");
+  const controller = useRef<AbortController | null>(null);
+  const download = async () => {
+    if (state === "preparing" || state === "fetching" || state === "converting") return;
+    controller.current?.abort();
+    const nextController = new AbortController();
+    controller.current = nextController;
+    setErrorMessage("");
+    setState("preparing");
+    try {
+      const prepared = await prepareYouTubeOption(jobId, option.optionId, nextController.signal);
+      setState(option.format.toLowerCase() === "mp3" ? "converting" : "fetching");
+      const response = await fetch(mediaUrl(prepared.data.downloadUrl), { signal: nextController.signal });
+      if (!response.ok) {
+        let code = "DOWNLOAD_FAILED";
+        try {
+          const payload = await response.json() as { error?: { code?: string } };
+          code = payload.error?.code ?? code;
+        } catch {
+          /* safe fallback */
+        }
+        throw new ApiClientError(code, userMessage(code, t), response.status);
+      }
+      const blob = await response.blob();
+      if (blob.size === 0) throw new ApiClientError("DOWNLOAD_FAILED", userMessage("DOWNLOAD_FAILED", t));
+      const objectUrl = URL.createObjectURL(blob);
+      const trigger = document.createElement("a");
+      trigger.href = objectUrl;
+      trigger.download = `instafetch-${option.optionId.slice(0, 12)}.${prepared.data.extension}`;
+      trigger.rel = "noreferrer";
+      document.body.appendChild(trigger);
+      trigger.click();
+      trigger.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+      setState("success");
+      window.setTimeout(() => setState("idle"), 2_500);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      const code = error instanceof ApiClientError ? error.code : "DOWNLOAD_FAILED";
+      setErrorMessage(userMessage(code, t));
+      setState("error");
+    }
+  };
+  const label = state === "preparing"
+    ? t("download.preparing")
+    : state === "fetching"
+      ? option.requiresMux ? t("download.combining") : t("download.fetching")
+      : state === "converting"
+        ? t("download.converting")
+        : state === "success"
+          ? t("download.ready")
+          : state === "error"
+            ? t("download.retry")
+            : t("download.option");
+  return (
+    <div className="youtube-option__action">
+      <button
+        aria-busy={state === "preparing" || state === "fetching" || state === "converting"}
+        className="download-link"
+        disabled={state === "preparing" || state === "fetching" || state === "converting"}
+        onClick={() => void download()}
+        type="button"
+      >
+        {state === "success" ? <Check aria-hidden="true" size={17} /> : state === "error" ? <CircleAlert aria-hidden="true" size={17} /> : <Download aria-hidden="true" size={17} />}
+        {label}
+      </button>
+      {errorMessage && <p aria-live="polite" className="download-feedback">{errorMessage}</p>}
+    </div>
+  );
+}
+
+function YouTubeOptionRow({ jobId, option }: { jobId: string; option: YouTubeDownloadOption }) {
+  const { t } = useI18n();
+  const isVideo = option.kind === "video";
+  const recommended = isVideo && option.resolution === 720;
+  const detail = isVideo
+    ? `${option.container.toUpperCase()}${option.width && option.height ? ` · ${option.width}×${option.height}` : ""}${option.fps ? ` · ${Math.round(option.fps)} FPS` : ""}`
+    : `${option.format.toUpperCase()}${option.bitrateKbps ? ` · ${Math.round(option.bitrateKbps)} kbps` : ""}`;
+  return (
+    <article className={`youtube-option${recommended ? " youtube-option--recommended" : ""}`}>
+      <div className="youtube-option__main">
+        <span className="media-badge media-badge--video">{isVideo ? option.format.toUpperCase() : option.format.toUpperCase()}</span>
+        <div>
+          <h3>{option.qualityLabel}{recommended && <span className="youtube-option__recommended">{t("youtube.recommended")}</span>}</h3>
+          <p>{detail}</p>
+          <small>{option.compatibilityLabel}</small>
+        </div>
+      </div>
+      <div className="youtube-option__meta">
+        <strong>{formatSize(option)}</strong>
+        <span>{option.sizeKind === "estimated" ? t("options.estimated") : option.sizeKind === "unknown" ? t("options.sizeUnavailable") : t("options.exact")}</span>
+      </div>
+      <YouTubeDownloadButton jobId={jobId} option={option} />
+    </article>
+  );
+}
+
+function YouTubeResults({ data }: { data: ResolveData }) {
+  const { t } = useI18n();
+  const [tab, setTab] = useState<"video" | "audio">((data.downloadOptions?.length ?? 0) > 0 ? "video" : "audio");
+  const [showPreview, setShowPreview] = useState(false);
+  const videoOptions = data.downloadOptions ?? [];
+  const audioOptions = data.audioOptions ?? [];
+  const previewItem = data.items[0];
+  const duration = data.durationSeconds === null || data.durationSeconds === undefined ? null : `${Math.floor(data.durationSeconds / 60)}:${String(Math.floor(data.durationSeconds % 60)).padStart(2, "0")}`;
+  if (!data.jobId) return null;
+  return (
+    <section aria-labelledby="results-heading" className="results-section youtube-results" id="results">
+      <div className="results-heading-row">
+        <div>
+          <p className="eyebrow eyebrow--purple">{t("results.eyebrow")}</p>
+          <h2 id="results-heading">{t("youtube.resultsHeading")}</h2>
+          <p className="results-subtitle">{data.author ?? t("results.publicMedia")}{data.title ? ` · ${data.title}` : ""}{duration ? ` · ${duration}` : ""}</p>
+        </div>
+        <span className="result-type"><Youtube aria-hidden="true" size={15} />{data.sourceType === "youtube_short" ? "Short" : "YouTube"}</span>
+      </div>
+      <div className="youtube-preview-card">
+        <div className="youtube-preview-card__visual">
+          {showPreview && previewItem ? <MediaPreview category="youtube" item={previewItem} /> : data.thumbnail ? <img alt={data.title ? `${data.title} thumbnail` : t("media.thumbnail")} src={mediaUrl(data.thumbnail)} /> : previewItem ? <MediaPreview category="youtube" item={previewItem} /> : null}
+          {data.thumbnail && previewItem && !showPreview && <button className="youtube-preview-card__play" onClick={() => setShowPreview(true)} type="button"><Play aria-hidden="true" size={16} />{t("youtube.preview")}</button>}
+        </div>
+        <div className="youtube-preview-card__copy">
+          <span className="hero-kicker hero-kicker--dark">{t("youtube.publicOnly")}</span>
+          <h3>{data.title ?? t("results.publicMedia")}</h3>
+          <p>{t("youtube.optionsIntro")}</p>
+          <small>{t("youtube.selectionNote")}</small>
+        </div>
+      </div>
+      <div aria-label={t("youtube.tabs")} className="youtube-tabs" role="tablist">
+        <button aria-selected={tab === "video"} className={tab === "video" ? "youtube-tab youtube-tab--active" : "youtube-tab"} onClick={() => setTab("video")} role="tab" type="button">{t("youtube.videoTab")} <span>{videoOptions.length}</span></button>
+        <button aria-selected={tab === "audio"} className={tab === "audio" ? "youtube-tab youtube-tab--active" : "youtube-tab"} onClick={() => setTab("audio")} role="tab" type="button">{t("youtube.audioTab")} <span>{audioOptions.length}</span></button>
+      </div>
+      <div aria-live="polite" className="youtube-options" role="tabpanel">
+        {(tab === "video" ? videoOptions : audioOptions).map((option) => <YouTubeOptionRow jobId={data.jobId!} key={option.optionId} option={option} />)}
+        {(tab === "video" ? videoOptions : audioOptions).length === 0 && <p className="youtube-empty">{t("youtube.noOptions")}</p>}
+      </div>
+    </section>
+  );
+}
+
 function Results({ data }: { data: ResolveData }) {
+  if (data.platform === "youtube" && data.downloadOptions) return <YouTubeResults data={data} />;
   const { t } = useI18n();
   const itemCount = data.itemCount ?? data.items.length;
   const resolvedItemCount = data.resolvedItemCount ?? data.items.length;
@@ -815,6 +1010,7 @@ const faqs = Array.from({ length: 9 }, (_, index) => [
 function HomePage() {
   const { t } = useI18n();
   const downloader = useDownloader();
+  const engineStatus = useEngineStatus();
   const pageViewTracked = useRef(false);
   useEffect(() => {
     if (pageViewTracked.current) return;
@@ -856,7 +1052,7 @@ function HomePage() {
               </div>
             </div>
             <div className="hero-tool-wrap">
-              <DownloaderPanel downloader={downloader} />
+              <DownloaderPanel downloader={downloader} engineStatus={engineStatus} />
               <StatusMessage
                 onRetry={downloader.retry}
                 state={downloader.state}

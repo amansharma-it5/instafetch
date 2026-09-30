@@ -116,13 +116,13 @@ Create a Pages project from the same repository and `main` branch with these set
 
 Cloudflare Pages should use the repository's `package-lock.json` and npm workspaces. Set both frontend variables before each production build so the browser calls the Render API and generated canonical/social metadata uses the intended site origin; no API credentials belong in frontend variables. For a future custom domain, add the domain to Pages, update `VITE_SITE_URL`, add the exact origin to the backend `WEB_ORIGIN`, and redeploy the affected service(s).
 
-There is no Wrangler configuration or Workers deployment script in this repository. If a separate `Workers Builds` check appears beside the Pages check, review the Cloudflare account or GitHub integration settings rather than adding Worker configuration here.
+There is no Wrangler configuration or Workers deployment script in this repository. The intended frontend deployment is Cloudflare Pages; the API is a Render Docker service. If GitHub shows a separate `Workers Builds: instafetch` check beside the successful Pages check, it is an account-level Worker connection, not a repository build target. In Cloudflare, open **Workers & Pages → the `instafetch` Worker → Settings → Builds → Disconnect**. Keep the **Pages → `instafetch`** Git connection intact. If the Worker is needed for another project, use **Settings → Builds → Manage** to remove this repository from that Worker and connect the correct repository instead. Cloudflare documents that a Worker build without a matching Wrangler configuration can fail during automatic configuration; do not add a fake `wrangler.toml` to this repository just to satisfy that unrelated check.
 
 ## Runtime limits
 
 The API keeps expensive public-media work bounded for the free hosting footprint:
 
-- yt-dlp/gallery-dl extraction and ordinary media processing use bounded 30-second process/request timeouts. YouTube resolution has a bounded 45-second total budget across the default, `mweb`+PO-token, and `android_vr` attempts; YouTube media transfers have a 90-second per-stream budget and YouTube FFmpeg/ffprobe work has a separate 60-second budget. The browser resolve request has a 120-second client timeout.
+- yt-dlp/gallery-dl extraction and ordinary media processing use bounded 30-second process/request timeouts. YouTube resolution has a bounded 45-second total budget across the default, `mweb`+PO-token, and `android_vr` attempts; YouTube media transfers have a 180-second per-stream budget and YouTube FFmpeg/ffprobe work has a separate 60-second budget. The browser resolve request has a 120-second client timeout.
 - A single source or materialized output is limited to 100 MB. The in-memory temporary media cache is limited to 500 MB and 50 files per resolution.
 - Resolution records, media files, and HMAC preview/download tokens expire after 5 minutes. Resolution storage is capped at 100 jobs and 100 items per job. Upstream redirects are limited to three hops.
 - At most two independent media materialization operations (including FFmpeg work) run at once. There is no queue; additional requests receive `SERVER_BUSY` and can be retried shortly.

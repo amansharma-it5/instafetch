@@ -131,6 +131,61 @@ test('submits a public YouTube video through the platform route', async ({ page 
   await expect(page.getByText('Download video')).toBeVisible();
 });
 
+test('resolves YouTube options, prepares only a selected video, then downloads audio MP3', async ({ page }) => {
+  let prepareCalls = 0;
+  await page.route('**/api/youtube/resolve', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      success: true,
+      data: {
+        platform: 'youtube', sourceType: 'youtube_video', title: 'Public option matrix', author: 'Open channel',
+        thumbnail: '/api/thumbnail?token=thumbnail-1', previewUrl: '/api/preview?token=preview-1', previewOptionId: 'option-720',
+        jobId: '00000000-0000-0000-0000-000000000001', isCarousel: false, itemCount: 1, resolvedItemCount: 1, partial: false, warning: null,
+        items: [{ ...videoItem, id: 'option-720', previewUrl: '/api/preview?token=preview-1', hasAudio: true, hasVideo: true }],
+        downloadOptions: [
+          { optionId: '00000000-0000-0000-0000-000000000360', kind: 'video', format: 'mp4', resolution: 360, width: 640, height: 360, container: 'mp4', videoCodec: 'avc1', audioCodec: 'mp4a', fps: 30, filesizeBytes: 4_000_000, filesizeApproximate: false, sizeBytes: 4_000_000, sizeKind: 'exact', qualityLabel: '360p', hasAudio: true, requiresMux: false, compatibilityLabel: 'MP4 · broadly compatible', bitrateKbps: 700 },
+          { optionId: '00000000-0000-0000-0000-000000000720', kind: 'video', format: 'mp4', resolution: 720, width: 1280, height: 720, container: 'mp4', videoCodec: 'avc1', audioCodec: 'mp4a', fps: 30, filesizeBytes: 12_000_000, filesizeApproximate: false, sizeBytes: 12_000_000, sizeKind: 'exact', qualityLabel: '720p', hasAudio: true, requiresMux: false, compatibilityLabel: 'MP4 · broadly compatible', bitrateKbps: 2_000 },
+          { optionId: '00000000-0000-0000-0000-000000001080', kind: 'video', format: 'mp4', resolution: 1080, width: 1920, height: 1080, container: 'mp4', videoCodec: 'avc1', audioCodec: 'mp4a', fps: 30, filesizeBytes: 24_000_000, filesizeApproximate: true, sizeBytes: 24_000_000, sizeKind: 'estimated', qualityLabel: '1080p', hasAudio: true, requiresMux: true, compatibilityLabel: 'High quality · prepared on download', bitrateKbps: 4_000 },
+        ],
+        audioOptions: [
+          { optionId: '00000000-0000-0000-0000-000000000m4a', kind: 'audio', format: 'm4a', resolution: null, width: null, height: null, container: 'm4a', videoCodec: null, audioCodec: 'mp4a', fps: null, filesizeBytes: 3_000_000, filesizeApproximate: false, sizeBytes: 3_000_000, sizeKind: 'exact', qualityLabel: 'M4A · 192 kbps', hasAudio: true, requiresMux: false, compatibilityLabel: 'Original audio · broadly compatible', bitrateKbps: 192 },
+          { optionId: '00000000-0000-0000-0000-000000000mp3', kind: 'audio', format: 'mp3', resolution: null, width: null, height: null, container: 'mp3', videoCodec: null, audioCodec: 'mp3', fps: null, filesizeBytes: 2_000_000, filesizeApproximate: true, sizeBytes: 2_000_000, sizeKind: 'estimated', qualityLabel: 'MP3 · 128 kbps', hasAudio: true, requiresMux: false, compatibilityLabel: 'Transcoded on download · source-dependent quality', bitrateKbps: 128 },
+        ],
+      },
+    }) });
+  });
+  await page.route('**/api/thumbnail**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0xff, 0xd9]) });
+  });
+  await page.route('**/api/youtube/prepare', async (route) => {
+    prepareCalls += 1;
+    const body = route.request().postDataJSON() as { optionId: string };
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: { optionId: body.optionId, downloadUrl: `/api/download?token=prepared-${prepareCalls}`, extension: body.optionId.endsWith('mp3') ? 'mp3' : 'mp4', kind: body.optionId.endsWith('mp3') ? 'audio' : 'video' } }) });
+  });
+  await page.route('**/api/download**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'video/mp4', body: Buffer.concat([Buffer.from('0000ftypisom'), Buffer.alloc(32)]) });
+  });
+  await page.goto('/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  await page.getByRole('button', { name: 'Download', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Choose a format' })).toBeVisible();
+  await expect(page.getByText('360p')).toBeVisible();
+  await expect(page.getByText('720p')).toBeVisible();
+  await expect(page.getByText('1080p')).toBeVisible();
+  await expect(page.getByText('≈ 22.9 MB')).toBeVisible();
+
+  const videoOption = page.locator('.youtube-option').filter({ hasText: '1080p' });
+  await videoOption.getByRole('button', { name: 'Download', exact: true }).click();
+  await expect(videoOption.getByRole('button', { name: 'Ready', exact: true })).toBeVisible();
+  expect(prepareCalls).toBe(1);
+
+  await page.getByRole('tab', { name: /Audio/ }).click();
+  await expect(page.getByRole('heading', { name: 'MP3 · 128 kbps' })).toBeVisible();
+  const audioOption = page.locator('.youtube-option').filter({ hasText: 'MP3 · 128 kbps' });
+  await audioOption.getByRole('button', { name: 'Download', exact: true }).click();
+  await expect(audioOption.getByRole('button', { name: 'Ready', exact: true })).toBeVisible();
+  expect(prepareCalls).toBe(2);
+});
+
 test('explains anonymous YouTube access failures without offering login workarounds', async ({ page }) => {
   await page.route('**/api/youtube/resolve', async (route) => {
     await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ success: false, error: { code: 'LOGIN_REQUIRED', message: 'internal detail' } }) });

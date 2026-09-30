@@ -45,8 +45,8 @@ jobs:
       - name: Build workspaces
         run: npm run build
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
+      - name: Install Playwright browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Run end-to-end tests
         run: npm run e2e

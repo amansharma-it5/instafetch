@@ -98,6 +98,15 @@ export class ResolutionStore {
     return undefined;
   }
 
+  replaceItem(resolutionId: string, mediaId: string, item: InternalMediaItem): InternalMediaItem | undefined {
+    const resolution = this.get(resolutionId);
+    if (!resolution) return undefined;
+    const index = resolution.items.findIndex((candidate) => candidate.id === mediaId);
+    if (index < 0) return undefined;
+    resolution.items[index] = item;
+    return item;
+  }
+
   size(): number {
     this.cleanup();
     return this.resolutions.size;

@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-export type DownloadTokenPurpose = 'preview' | 'download';
+export type DownloadTokenPurpose = 'preview' | 'download' | 'thumbnail';
 
 export interface DownloadTokenPayload {
   resolutionId: string;
