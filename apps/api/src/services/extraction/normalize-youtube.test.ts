@@ -25,6 +25,14 @@ describe('normalizeYouTubeMetadata', () => {
     expect(result.sourceType).toBe('youtube_short');
     expect(result.items[0]).toMatchObject({ extension: 'mp4', hasAudio: true, audioProviderUrl: null });
   });
+  it('prefers a reasonable 720p candidate over a larger 1080p stream', () => {
+    const result = normalizeYouTubeMetadata({ ...base, formats: [
+      { url: 'https://rr1.googlevideo.com/video-1080.mp4', ext: 'mp4', width: 1920, height: 1080, vcodec: 'avc1.64001f', acodec: 'none', filesize: 90_000_000 },
+      { url: 'https://rr1.googlevideo.com/video-720.webm', ext: 'webm', width: 1280, height: 720, vcodec: 'vp9', acodec: 'none', filesize: 12_000_000 },
+      { url: 'https://rr1.googlevideo.com/audio.m4a', ext: 'm4a', vcodec: 'none', acodec: 'mp4a.40.2', abr: 128, filesize: 3_000_000 },
+    ] }, 'video');
+    expect(result.items[0]).toMatchObject({ height: 720, extension: 'webm', hasAudio: true });
+  });
   it('ignores HLS manifest formats and selects a direct media URL', () => {
     const result = normalizeYouTubeMetadata({ ...base, formats: [
       { url: 'https://rr1.googlevideo.com/manifest.m3u8', protocol: 'm3u8_native', ext: 'mp4', width: 1920, height: 1080, vcodec: 'avc1', acodec: 'mp4a.40.2' },

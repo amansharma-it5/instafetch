@@ -28,6 +28,7 @@ function message(code: ApiError['code']): string {
     case 'UNSUPPORTED_MEDIA': return 'No downloadable public video format was exposed';
     case 'EXTRACTION_TIMEOUT': return 'YouTube media resolution timed out';
     case 'PROVIDER_UNAVAILABLE': return 'The YouTube extraction provider is unavailable';
+    case 'TOKEN_PROVIDER_UNAVAILABLE': return 'The YouTube token provider is unavailable';
     case 'PROVIDER_MALFORMED_RESPONSE': return 'YouTube returned an unsupported media response';
     case 'RATE_LIMITED': return 'The service is temporarily rate limited';
     default: return 'The request could not be processed';
@@ -70,7 +71,10 @@ export function createYouTubeRouter({ provider, store, tokenService }: YouTubeRo
       if (error instanceof YouTubeUrlError && error.code === 'PLAYLIST_NOT_SUPPORTED') throw new ApiError('PLAYLIST_NOT_SUPPORTED', message('PLAYLIST_NOT_SUPPORTED'), 422);
       throw new ApiError('INVALID_YOUTUBE_URL', message('INVALID_YOUTUBE_URL'), 400);
     }
-    if (!provider.isAvailable()) throw new ApiError('PROVIDER_UNAVAILABLE', message('PROVIDER_UNAVAILABLE'), 503);
+    if (!provider.isAvailable()) {
+      const code = provider.availabilityErrorCode?.() ?? 'PROVIDER_UNAVAILABLE';
+      throw new ApiError(code, message(code), 503);
+    }
     let metadata: Record<string, unknown>;
     try { metadata = await provider.resolve(validated); } catch (error) { throw providerError(error); }
     let normalized;

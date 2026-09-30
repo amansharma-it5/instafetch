@@ -1,7 +1,9 @@
 import { createApp } from './app.js';
+import { BgutilProviderSupervisor } from './services/extraction/bgutil-provider.js';
 import { MediaMaterializer } from './services/media/media-materializer.js';
 import { ResolutionStore } from './services/store/resolution-store.js';
 import { DownloadTokenService, isSecureDownloadTokenSecret } from './services/tokens/download-tokens.js';
+import { YtDlpYouTubeProvider } from './services/extraction/YtDlpYouTubeProvider.js';
 
 const port = Number.parseInt(process.env.PORT ?? '3001', 10);
 if (!Number.isInteger(port) || port < 1 || port > 65_535) {
@@ -18,16 +20,29 @@ const configuredSecret = process.env.DOWNLOAD_TOKEN_SECRET?.trim();
 const tokenService = isSecureDownloadTokenSecret(configuredSecret)
   ? new DownloadTokenService(configuredSecret)
   : undefined;
-const server = createApp({ store, materializer, tokenService }).listen(port, '0.0.0.0', () => {
-  process.stdout.write(`InstaFetch API listening on port ${port}\n`);
-});
+const potProvider = new BgutilProviderSupervisor();
 
-function shutdown(): void {
-  server.close(() => {
-    void materializer.dispose();
-    store.dispose();
+async function start(): Promise<void> {
+  await potProvider.start();
+  const youtubeProvider = new YtDlpYouTubeProvider({
+    youtubePotProviderUrl: potProvider.url(),
+    requirePotProvider: process.env.NODE_ENV === 'production',
+    isPotProviderAvailable: () => potProvider.isReady(),
   });
+  const server = createApp({ store, materializer, tokenService, youtubeProvider }).listen(port, '0.0.0.0', () => {
+    process.stdout.write(`InstaFetch API listening on port ${port}\n`);
+  });
+
+  async function shutdown(): Promise<void> {
+    await potProvider.stop();
+    server.close(() => {
+      void materializer.dispose();
+      store.dispose();
+    });
+  }
+
+  process.once('SIGINT', () => { void shutdown(); });
+  process.once('SIGTERM', () => { void shutdown(); });
 }
 
-process.once('SIGINT', shutdown);
-process.once('SIGTERM', shutdown);
+void start();

@@ -6,6 +6,7 @@ const VIDEO_EXTENSIONS = new Set(['avi', 'm4v', 'mkv', 'mov', 'mp4', 'webm']);
 const AUDIO_EXTENSIONS = new Set(['aac', 'm4a', 'mp3', 'oga', 'ogg', 'opus', 'wav', 'webm']);
 const MAX_DURATION_SECONDS = 20 * 60;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
+const MAX_PREFERRED_HEIGHT = 720;
 
 export class YouTubeMetadataError extends Error {
   constructor(public readonly code: 'MEDIA_TOO_LONG' | 'PRIVATE_MEDIA' | 'AGE_RESTRICTED' | 'LIVE_NOT_AVAILABLE' | 'DRM_UNSUPPORTED' | 'UNSUPPORTED_MEDIA' | 'FILE_TOO_LARGE', message: string) {
@@ -35,6 +36,7 @@ function isAudio(format: Record<string, unknown>): boolean {
   return isDirect(format) && Boolean(stringValue(format.url)) && (Boolean(codec(format, 'acodec')) && !codec(format, 'vcodec') || AUDIO_EXTENSIONS.has(String(format.ext ?? '').toLowerCase()));
 }
 function area(format: Record<string, unknown>): number { return (dimension(format.width) ?? 0) * (dimension(format.height) ?? 0); }
+function height(format: Record<string, unknown>): number { return dimension(format.height) ?? 0; }
 function mp4H264Score(format: Record<string, unknown>): number {
   const ext = String(format.ext ?? '').toLowerCase();
   const vcodec = String(format.vcodec ?? '').toLowerCase();
@@ -83,8 +85,10 @@ export function normalizeYouTubeMetadata(metadata: Record<string, unknown>, rout
   const videos = formats.filter(isVideo).concat(isVideo(metadata) ? [metadata] : []).sort(compareVideo);
   const audioFormats = formats.filter(isAudio).sort(compareAudio);
   const bestAudio = audioFormats[0];
-  const combined = videos.filter((format) => Boolean(codec(format, 'acodec')) && fitsLimit(format))[0];
-  const selectedVideo = combined ?? videos.filter((format) => fitsLimit(format, bestAudio))[0] ?? videos[0];
+  const preferredVideos = videos.filter((format) => height(format) > 0 && height(format) <= MAX_PREFERRED_HEIGHT);
+  const candidates = (preferredVideos.length > 0 ? preferredVideos : videos).sort(compareVideo);
+  const combined = candidates.find((format) => Boolean(codec(format, 'acodec')) && fitsLimit(format));
+  const selectedVideo = combined ?? candidates.find((format) => fitsLimit(format, bestAudio)) ?? candidates[0];
   if (!selectedVideo) throw new YouTubeMetadataError('UNSUPPORTED_MEDIA', 'No downloadable video format was exposed');
   const audio = combined ? undefined : bestAudio;
   if (!combined && !audio) throw new YouTubeMetadataError('UNSUPPORTED_MEDIA', 'No downloadable audio format was exposed');

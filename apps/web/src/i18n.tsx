@@ -242,6 +242,8 @@ const messages: Record<Locale, Record<string, string>> = {
       "We could not resolve that media. Availability depends on what the platform exposes publicly without login.",
     "error.PROVIDER_UNAVAILABLE":
       "The media service is waking up or temporarily unavailable. Please try again shortly.",
+    "error.TOKEN_PROVIDER_UNAVAILABLE":
+      "YouTube anonymous access is temporarily unavailable. Please try again shortly.",
     "error.PROVIDER_MALFORMED_RESPONSE":
       "That link did not return a usable public media result.",
     "error.NETWORK_FAILURE":
@@ -517,6 +519,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "error.EXTRACTION_TIMEOUT": "La comprobación del contenido público tardó demasiado. Inténtalo de nuevo.",
     "error.EXTRACTION_FAILED": "No pudimos resolver ese contenido. La disponibilidad depende de lo que la plataforma exponga sin iniciar sesión.",
     "error.PROVIDER_UNAVAILABLE": "El servicio de medios no está disponible temporalmente. Inténtalo de nuevo pronto.",
+    "error.TOKEN_PROVIDER_UNAVAILABLE": "El acceso anónimo de YouTube no está disponible temporalmente. Inténtalo de nuevo pronto.",
     "error.PROVIDER_MALFORMED_RESPONSE": "Ese enlace no devolvió un resultado de contenido público utilizable.",
     "error.NETWORK_FAILURE": "No pudimos conectar con InstaFetch. Comprueba tu conexión e inténtalo de nuevo.",
     "error.INVALID_TOKEN": "Este enlace de vista previa no es válido. Resuelve la publicación de nuevo.",
@@ -767,6 +770,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "error.EXTRACTION_TIMEOUT": "La vérification du média public a expiré. Réessayez.",
     "error.EXTRACTION_FAILED": "Impossible de résoudre ce média. La disponibilité dépend de ce que la plateforme expose sans connexion.",
     "error.PROVIDER_UNAVAILABLE": "Le service média est temporairement indisponible. Réessayez bientôt.",
+    "error.TOKEN_PROVIDER_UNAVAILABLE": "L’accès anonyme à YouTube est temporairement indisponible. Réessayez bientôt.",
     "error.PROVIDER_MALFORMED_RESPONSE": "Ce lien n’a pas renvoyé de résultat média public utilisable.",
     "error.NETWORK_FAILURE": "Impossible de joindre InstaFetch. Vérifiez votre connexion puis réessayez.",
     "error.INVALID_TOKEN": "Ce lien d’aperçu est invalide. Résolvez à nouveau la publication.",

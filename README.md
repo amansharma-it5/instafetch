@@ -12,7 +12,7 @@ The repository is an npm-workspaces monorepo:
 
 Requirements:
 
-- Node.js 22 or newer
+- Node.js 26 or newer for the production Docker image (Node.js 22 or newer is sufficient for local development)
 - npm 10 or newer
 - yt-dlp, ffmpeg, and ffprobe on `PATH` for live extraction checks
 
@@ -58,6 +58,7 @@ Backend variables (the root `.env.example` is the template):
 - `PORT`: supplied by Render in production; `3001` is the local default.
 - `NODE_ENV`: set to `production` on Render.
 - `YTDLP_PATH`, `FFMPEG_PATH`, `FFPROBE_PATH`, and `GALLERY_DL_PATH`: optional local executable overrides. Container deployments resolve all four tools from `PATH`.
+- `BGUTIL_SERVER_PATH`: optional local path to the bgutil server entrypoint. The production image bundles the pinned server and starts it on the fixed loopback endpoint `http://127.0.0.1:4416`; this endpoint is not configurable from the browser.
 
 Generate a secret locally without storing it in Git:
 
@@ -78,7 +79,7 @@ Frontend variable:
 - **Production URL:** `https://instafetch.pages.dev`
 - **Health checks:** `https://instafetch-nm9b.onrender.com/health/live` and `/health/ready`
 - **Verified support:** public Instagram Reels with anonymous resolve, preview, and download.
-- **Beta support:** public YouTube videos and Shorts up to 20 minutes when yt-dlp exposes genuine anonymous video and audio formats. One video URL is handled at a time; playlist-only links are rejected.
+- **Beta support:** public YouTube videos and Shorts up to 20 minutes when the pinned yt-dlp + yt-dlp-ejs + bgutil PO-token provider stack exposes genuine anonymous video and audio formats. One video URL is handled at a time; playlist-only links are rejected. The provider runs only on the API loopback interface and never exposes PO tokens or upstream URLs to the browser.
 - **Conditional support:** Instagram video posts, photos, carousels, Stories, and legacy TV URLs when Instagram exposes a genuine anonymous media file.
 - **Analytics:** disabled by default through `VITE_ANALYTICS_ENABLED=false`. If explicitly enabled, only the allowlisted aggregate event name and safe content category are emitted; URLs, usernames, captions, media URLs, tokens, filenames, IP addresses, and credentials are never included. No third-party tracking vendor is configured.
 - **Production verification:** run `npm run smoke:production` for frontend and health checks. To verify a public Reel or YouTube video without credentials, cookies, or browser profiles, pass one explicitly supplied URL to the same command.
@@ -96,7 +97,7 @@ Frontend variable:
 6. Set `DOWNLOAD_TOKEN_SECRET` to a newly generated random value. Do not paste it into Git or `render.yaml`.
 7. Use `/health/live` for the health check. Render supplies `PORT`; do not override it.
 
-The API image installs Node.js 22, yt-dlp, gallery-dl, ffmpeg, and ffprobe. It runs only the compiled API server as a non-root user. Temporary media is kept under the instance's ephemeral filesystem and removed after the short resolution/media TTL; no permanent user files are expected, so no persistent disk is required.
+The API image installs pinned Node.js 26, yt-dlp 2026.8.19, yt-dlp-ejs 0.8.0, gallery-dl 1.32.14, bgutil-ytdlp-pot-provider 2.0.0, ffmpeg, and ffprobe. It builds the bgutil HTTP provider into the image, starts it on `127.0.0.1:4416`, and runs only the compiled API server as a non-root user. Temporary media is kept under the instance's ephemeral filesystem and removed after the short resolution/media TTL; no permanent user files are expected, so no persistent disk is required.
 
 ## Deploy the web app to Cloudflare Pages
 
@@ -117,7 +118,7 @@ There is no Wrangler configuration or Workers deployment script in this reposito
 
 The API keeps expensive public-media work bounded for the free hosting footprint:
 
-- yt-dlp/gallery-dl extraction, upstream fetches, FFmpeg, and ffprobe each have a 30-second process/request timeout. The browser resolve request has a 120-second client timeout.
+- Instagram extraction and YouTube metadata extraction have a 30-second provider timeout. YouTube upstream media transfer has a 90-second timeout, while FFmpeg/ffprobe processing has a 60-second timeout. The browser resolve request has a 120-second client timeout.
 - A single source or materialized output is limited to 100 MB. The in-memory temporary media cache is limited to 500 MB and 50 files per resolution.
 - Resolution records, media files, and HMAC preview/download tokens expire after 5 minutes. Resolution storage is capped at 100 jobs and 100 items per job. Upstream redirects are limited to three hops.
 - At most two independent media materialization operations (including FFmpeg work) run at once. There is no queue; additional requests receive `SERVER_BUSY` and can be retried shortly.

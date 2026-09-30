@@ -153,7 +153,7 @@ export function createApp(options: AppOptions = {}) {
   app.get('/health/ready', (_request, response) => {
     const instagramAvailable = provider.isAvailable();
     const youtubeAvailable = youtubeProvider.isAvailable();
-    const ready = instagramAvailable && Boolean(tokenService);
+    const ready = instagramAvailable && youtubeAvailable && Boolean(tokenService);
     response.setHeader('Cache-Control', 'no-store');
     response.status(ready ? 200 : 503).json({
       status: ready ? 'ready' : 'not_ready',

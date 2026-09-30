@@ -33,6 +33,7 @@ describe("locale messages", () => {
       "EXTRACTION_TIMEOUT",
       "EXTRACTION_FAILED",
       "PROVIDER_UNAVAILABLE",
+      "TOKEN_PROVIDER_UNAVAILABLE",
       "PROVIDER_MALFORMED_RESPONSE",
       "NETWORK_FAILURE",
       "INVALID_TOKEN",

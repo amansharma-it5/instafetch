@@ -48,4 +48,25 @@ describe('POST /api/youtube/resolve', () => {
     expect(login.status).toBe(401);
     expect(login.body.error.code).toBe('LOGIN_REQUIRED');
   });
+
+  it('reports a missing required PO-token provider without exposing its loopback endpoint', async () => {
+    const app = createApp({
+      youtubeProvider: {
+        isAvailable: () => false,
+        availabilityErrorCode: () => 'TOKEN_PROVIDER_UNAVAILABLE',
+        resolve: async () => metadata,
+      },
+    });
+    const response = await request(app).post('/api/youtube/resolve').send({ url });
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      success: false,
+      error: {
+        code: 'TOKEN_PROVIDER_UNAVAILABLE',
+        message: 'The YouTube token provider is unavailable',
+      },
+    });
+    expect(JSON.stringify(response.body)).not.toContain('127.0.0.1');
+  });
 });

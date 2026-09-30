@@ -142,6 +142,17 @@ test('explains anonymous YouTube access failures without offering login workarou
   await expect(page.getByRole('button', { name: 'Try again' })).not.toBeVisible();
 });
 
+test('explains when the YouTube token provider is temporarily unavailable', async ({ page }) => {
+  await page.route('**/api/youtube/resolve', async (route) => {
+    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ success: false, error: { code: 'TOKEN_PROVIDER_UNAVAILABLE', message: 'internal detail' } }) });
+  });
+  await page.goto('/');
+  await page.getByPlaceholder('Paste an Instagram or YouTube link here').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  await page.getByRole('button', { name: 'Download', exact: true }).click();
+  await expect(page.getByText('YouTube anonymous access is temporarily unavailable. Please try again shortly.')).toBeVisible();
+  await expect(page.getByText('internal detail')).not.toBeVisible();
+});
+
 test('renders mixed carousel items independently', async ({ page }) => {
   await page.route('**/api/instagram/resolve', async (route) => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
